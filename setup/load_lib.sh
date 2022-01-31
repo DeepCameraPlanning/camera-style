@@ -20,4 +20,4 @@ ln -s $LIB_DIR/RAFT lib/RAFT
 ln -s $LIB_DIR/motion-detection/motion_detection lib/motion_detection
 
 # Comment line 22 and 23 of the file lib/sort/sort.py to avoid dependency conflicts
-python ./config/comment_lines.py
+python ./setup/comment_lines.py

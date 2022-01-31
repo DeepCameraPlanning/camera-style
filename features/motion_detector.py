@@ -16,7 +16,7 @@ from torchvision import transforms
 from lib.motion_detection.estimators.model import MLP
 
 # Avoid local import issues
-root_dir = [os.sep] + osp.dirname(osp.abspath(__file__)).split(os.sep)[:-2]
+root_dir = [os.sep] + osp.dirname(osp.abspath(__file__)).split(os.sep)[:-1]
 import_dir = ["lib", "RAFT", "core"]
 sys.path.append(osp.join(*root_dir + import_dir))
 from raft import RAFT
@@ -368,3 +368,17 @@ class MotionDetector:
         """Compute motion features: one-hot encode motion detections."""
         motion_features = np.eye(5)[motion_detections]
         return motion_features
+
+
+if __name__ == "__main__":
+    root_dir = "/media/scratch/courant/camera-planning"
+    video_path = osp.join(root_dir, "videos", "3_xA1Uz_TMzhs.mkv")
+    video_clip = cv2.VideoCapture(video_path)
+    frames = [video_clip.read()[1] for _ in range(int(video_clip.get(7)))]
+
+    flow_estimator = FlowEstimator()
+    forward_flows = flow_estimator.estimate_flow(frames)
+    backward_flows = flow_estimator.estimate_flow(frames[::-1])
+
+    motion_detector = MotionDetector()
+    print(motion_detector.detect_motion(forward_flows, backward_flows))
