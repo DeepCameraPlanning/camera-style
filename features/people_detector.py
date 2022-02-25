@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from lib.sort.sort import Sort
-from movie_style.tools.utils import compute_bbox_iou, get_patches
+from src.utils.tools import compute_bbox_iou, get_patches
 
 
 class SegmentationModel(LightningModule):
@@ -59,9 +59,9 @@ class PeopleDetector:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        progress_bar_refresh_rate = None
+        enable_progress_bar = True
         if not verbose:
-            progress_bar_refresh_rate = 0
+            enable_progress_bar = False
 
         config_file = "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"
         self._config = get_cfg()
@@ -76,9 +76,9 @@ class PeopleDetector:
         self.trainer = Trainer(
             gpus=num_gpus,
             num_nodes=num_nodes,
-            accelerator="dp",
+            strategy="dp",
             logger=False,
-            progress_bar_refresh_rate=progress_bar_refresh_rate,
+            enable_progress_bar=enable_progress_bar,
         )
 
         # Initialize a bounding-box tracker
@@ -127,7 +127,9 @@ class PeopleDetector:
         test_batch = [b for b in batch]
         return test_batch
 
-    def detect_people(self, frames: List[np.array]) -> List[np.array]:
+    def detect_people(
+        self, frames: List[np.array]
+    ) -> Tuple[np.array, np.array, np.array]:
         """
         Detect all human instances on given frames.
         Code adapted from: https://github.com/facebookresearch/detectron2.

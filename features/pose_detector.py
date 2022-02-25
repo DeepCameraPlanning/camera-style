@@ -14,7 +14,7 @@ from torchvision.transforms import ToTensor
 from lib.dope.model import dope_resnet50
 from lib.dope.postprocess import assign_hands_and_head_to_body
 from lib.lcrnet_v2_improved_ppi.lcr_net_ppi_improved import LCRNet_PPI_improved
-from movie_style.tools.utils import compute_bbox_iou
+from src.utils.tools import compute_bbox_iou
 
 
 class PoseModel(LightningModule):
@@ -55,9 +55,9 @@ class PoseEstimator:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        progress_bar_refresh_rate = None
+        enable_progress_bar = True
         if not verbose:
-            progress_bar_refresh_rate = 0
+            enable_progress_bar = False
 
         self._checkpoint_filename = osp.join(
             model_dir, "DOPErealtime_v1_0_0.pth.tgz"
@@ -77,7 +77,7 @@ class PoseEstimator:
             num_nodes=num_nodes,
             accelerator="dp",
             logger=False,
-            progress_bar_refresh_rate=progress_bar_refresh_rate,
+            enable_progress_bar=enable_progress_bar,
         )
 
     @staticmethod
@@ -183,6 +183,7 @@ class PoseEstimator:
         poselets: List[np.array],
         bbox_tracks: List[np.array],
         frame_dims: Tuple[int, int],
+        iou_threshold: float = 0.5,
     ) -> List[List[np.array]]:
         """Detect poselets from a list of frames and track them.
 
@@ -193,7 +194,7 @@ class PoseEstimator:
         :return: tracked poselets.
         """
         raw_poselet_tracks = self._get_tracks(
-            poselets, bbox_tracks, frame_dims, self.iou_threshold
+            poselets, bbox_tracks, frame_dims, iou_threshold
         )
         poselet_tracks = self._process_tracks(poselets, raw_poselet_tracks)
 

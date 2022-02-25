@@ -37,7 +37,7 @@ class RAFTModel(LightningModule):
 
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x1, x2 = x
-        flow, _ = self.model(x1, x2, iters=20, test_mode=True)
+        _, flow = self.model(x1, x2, iters=20, test_mode=True)
         return flow
 
 
@@ -66,10 +66,10 @@ class FlowEstimator:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        progress_bar_refresh_rate = None
+        enable_progress_bar = True
         if not verbose:
             pl.utilities.distributed.log.setLevel(logging.ERROR)
-            progress_bar_refresh_rate = 0
+            enable_progress_bar = False
 
         self._checkpoint_filename = osp.join(model_dir, "raft-things.pth")
         self._state_dict = {
@@ -84,9 +84,9 @@ class FlowEstimator:
         self.trainer = Trainer(
             gpus=num_gpus,
             num_nodes=num_nodes,
-            accelerator="dp",
+            # strategy="dp",
             logger=False,
-            progress_bar_refresh_rate=progress_bar_refresh_rate,
+            enable_progress_bar=enable_progress_bar,
         )
 
     @staticmethod
@@ -101,13 +101,13 @@ class FlowEstimator:
         preprocesser = transforms.Compose(
             [
                 transforms.ToPILImage(),
-                transforms.Resize((height // 2, width // 2)),
+                # transforms.Resize((height // 2, width // 2)),
                 transforms.ToTensor(),
             ]
         )
         processed_frames = torch.stack(
             [
-                preprocesser(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                preprocesser(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)) * 255
                 for frame in frames
             ]
         )
@@ -151,6 +151,10 @@ class FlowEstimator:
         flowed_frame = flow_to_image(flow, convert_to_bgr=True)
         return flowed_frame
 
+    def frame_to_flow(self, frame: np.array) -> np.array:
+        """ "Convert a Unity OF frame to a flow field."""
+        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+
 
 class MotionModel(LightningModule):
     def __init__(self):
@@ -177,7 +181,7 @@ class MotionDetector:
     def __init__(
         self,
         model_dir: str = "./models",
-        batch_size: int = 25,
+        batch_size: int = 64,
         num_gpus: int = 1,
         num_nodes: int = 1,
         num_workers: int = 12,
@@ -189,9 +193,9 @@ class MotionDetector:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        progress_bar_refresh_rate = None
+        enable_progress_bar = True
         if not verbose:
-            progress_bar_refresh_rate = 0
+            enable_progress_bar = False
 
         self._checkpoint_filename = osp.join(model_dir, "motion.pth")
         self._state_dict = {
@@ -206,9 +210,9 @@ class MotionDetector:
         self.trainer = Trainer(
             gpus=num_gpus,
             num_nodes=num_nodes,
-            accelerator="ddp",
+            # strategy="ddp",
             logger=False,
-            progress_bar_refresh_rate=progress_bar_refresh_rate,
+            enable_progress_bar=enable_progress_bar,
         )
 
         self.encoding_to_motion = {
@@ -224,7 +228,7 @@ class MotionDetector:
         flow: np.array,
         grid_dims: Tuple[int, int],
         n_angle_bins: int = 8,
-        magnitude_threshold: float = 1,
+        magnitude_threshold: float = 0,
     ) -> List[np.array]:
         """
         Get the average flow angle for each block of a grid and quantize it.
@@ -237,7 +241,7 @@ class MotionDetector:
         """
         flow_height, flow_width = flow.shape[:2]
         n_row, n_col = grid_dims
-        y_stride, x_stride = flow_height // n_row + 1, flow_width // n_col
+        y_stride, x_stride = flow_height // n_row + 1, flow_width // n_col + 1
 
         angle_map = [[None for _ in range(n_col)] for _ in range(n_row)]
         for i, y in enumerate(range(0, flow_height, y_stride)):
@@ -250,7 +254,7 @@ class MotionDetector:
                 y_subflow = sub_flow[:, :, 1]
                 # Compute angles and magnitudes
                 flow_angle = np.arctan2(y_subflow, x_subflow)
-                flow_magnitude = np.sqrt(x_subflow ** 2 + y_subflow ** 2)
+                flow_magnitude = np.sqrt(x_subflow**2 + y_subflow**2)
                 # Filter low magnitude angles and average angles
                 angle = (
                     flow_angle.mean()
@@ -269,11 +273,11 @@ class MotionDetector:
                     quantized_angle = 0
                 if quantized_angle < 0:
                     quantized_angle = -1
-                # One-hot encode quantized angle
-                encoded_angle = np.eye(n_angle_bins + 1)[quantized_angle + 1]
+                # # One-hot encode quantized angle
+                # encoded_angle = np.eye(n_angle_bins + 1)[quantized_angle + 1]
 
-                angle_map[i][j] = encoded_angle
-
+                # angle_map[i][j] = encoded_angle
+                angle_map[i][j] = quantized_angle
         return np.array(angle_map)
 
     @staticmethod
@@ -325,7 +329,7 @@ class MotionDetector:
         self,
         forward_flows: np.array,
         backward_flows: np.array,
-        window_size: int = 4,
+        window_size: int = 8,
     ) -> List[np.array]:
         """
         Infers the model and returns a motion class for each frame.
@@ -368,17 +372,3 @@ class MotionDetector:
         """Compute motion features: one-hot encode motion detections."""
         motion_features = np.eye(5)[motion_detections]
         return motion_features
-
-
-if __name__ == "__main__":
-    root_dir = "/media/scratch/courant/camera-planning"
-    video_path = osp.join(root_dir, "videos", "3_xA1Uz_TMzhs.mkv")
-    video_clip = cv2.VideoCapture(video_path)
-    frames = [video_clip.read()[1] for _ in range(int(video_clip.get(7)))]
-
-    flow_estimator = FlowEstimator()
-    forward_flows = flow_estimator.estimate_flow(frames)
-    backward_flows = flow_estimator.estimate_flow(frames[::-1])
-
-    motion_detector = MotionDetector()
-    print(motion_detector.detect_motion(forward_flows, backward_flows))
