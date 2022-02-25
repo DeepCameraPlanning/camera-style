@@ -48,7 +48,10 @@ class TripletFlowDataset(Dataset):
         transform: Callable,
     ) -> torch.Tensor:
         """Load flows and and apply transformations, shape: (C, T, W, H)."""
-        flows = torch.stack([load_pth(flow_path) for flow_path in flow_paths])
+        flows = torch.stack(
+            [load_pth(flow_path) for flow_path in flow_paths]
+        ).permute([3, 0, 1, 2])
+
         if transform is not None:
             flows = [transform(flow) for flow in flows]
 
