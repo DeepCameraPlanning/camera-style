@@ -5,7 +5,13 @@ import os.path as osp
 from tqdm import tqdm
 
 from features.motion_detector import FlowEstimator
-from src.utils.tools import save_pickle, load_frames, load_pickle
+from src.utils.utils import (
+    create_dir,
+    save_pickle,
+    load_frames,
+    load_pickle,
+    load_frames_fromdir,
+)
 
 
 def parse_arguments():
@@ -48,18 +54,16 @@ if __name__ == "__main__":
     flow_estimator = FlowEstimator(batch_size=16)
     for video_id in tqdm(video_ids):
         video_path = osp.join(video_dir, video_id)
-        frames = load_frames(video_path)
-
-        forward_flow_path = osp.join(
-            save_dir, "forward_flows", video_id[:-3] + "pk"
-        )
+        # Load frames and convert them from BRG to RGB
+        frames = [f[:, :, ::-1] for f in load_frames_fromdir(video_path)]
+        forward_flow_path = osp.join(save_dir, video_id + ".pk")
         # if not osp.exists(forward_flow_path):
-        forward_flows = flow_estimator.estimate_flow((frames))
+        forward_flows = flow_estimator.estimate_flow(frames)
         save_pickle(forward_flows, forward_flow_path)
 
-        backward_flow_path = osp.join(
-            save_dir, "backward_flows", video_id[:-3] + "pk"
-        )
-        # if not osp.exists(backward_flow_path):
-        backward_flows = flow_estimator.estimate_flow(frames[::-1])[::-1]
-        save_pickle(backward_flows, backward_flow_path)
+        # backward_flow_path = osp.join(
+        #     save_dir, "backward_flows", video_id[:-3] + "pk"
+        # )
+        # # if not osp.exists(backward_flow_path):
+        # backward_flows = flow_estimator.estimate_flow(frames[::-1])[::-1]
+        # save_pickle(backward_flows, backward_flow_path)

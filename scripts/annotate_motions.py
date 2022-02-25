@@ -5,7 +5,7 @@ import os.path as osp
 import cv2
 
 from features.motion_detector import FlowEstimator, MotionDetector
-from src.utils.tools import write_clip, load_frames, load_pickle
+from src.utils.utils import write_clip, load_frames, load_pickle
 
 
 encoding_to_motion = {

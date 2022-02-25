@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from src.utils.tools import load_frames, load_pickle, write_clip
+from src.utils.utils import load_frames, load_pickle, write_clip
 
 
 def parse_arguments():

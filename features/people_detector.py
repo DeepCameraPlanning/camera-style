@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from lib.sort.sort import Sort
-from src.utils.tools import compute_bbox_iou, get_patches
+from src.utils.utils import compute_bbox_iou, get_patches
 
 
 class SegmentationModel(LightningModule):

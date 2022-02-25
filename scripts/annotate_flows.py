@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 
 from features.motion_detector import FlowEstimator
-from src.utils.tools import load_frames, load_pickle, write_clip
+from src.utils.utils import load_frames, load_pickle, write_clip
 
 
 def parse_arguments():

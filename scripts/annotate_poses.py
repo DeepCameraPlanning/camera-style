@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from features.pose_detector import PoseEstimator
 from features.people_detector import PeopleDetector
-from src.utils.tools import load_frames, load_pickle, write_clip
+from src.utils.utils import load_frames, load_pickle, write_clip
 from lib.dope.visu import visualize_bodyhandface2d
 
 

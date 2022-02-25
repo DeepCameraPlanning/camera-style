@@ -34,6 +34,17 @@ def load_pickle(pickle_path: str) -> Any:
     return data
 
 
+def save_pth(data: Any, pth_path: str):
+    """Save data in a pth (PyTorch) file."""
+    torch.save(data, pth_path)
+
+
+def load_pth(pth_path: str) -> Any:
+    """Load a pth (PyTorch) file."""
+    data = torch.load(pth_path)
+    return data
+
+
 def save_pickle(data: Any, pickle_path: str):
     """Save data in a pickle file."""
     with open(pickle_path, "wb") as f:
@@ -51,7 +62,18 @@ def save_csv(data: Any, csv_path: str):
     pd.DataFrame(data).to_csv(csv_path, header=False, index=False)
 
 
+def load_frames_fromdir(video_dir: str) -> List[np.array]:
+    """Load BGR frames from a directory of frames."""
+    frames = []
+    for frame_filename in os.listdir(video_dir):
+        frame_path = osp.join(video_dir, frame_filename)
+        frames.append(cv2.imread(frame_path))
+
+    return frames
+
+
 def load_frames(video_path: str) -> List[np.array]:
+    """Load BGR frames from a video file."""
     video_clip = cv2.VideoCapture(video_path)
     frames = []
     for _ in range(int(video_clip.get(7))):
