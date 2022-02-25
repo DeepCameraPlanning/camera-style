@@ -2,8 +2,9 @@ import os
 import os.path as osp
 import pickle
 import subprocess
-from typing import Any, Sequence
+from typing import Any, List, Sequence, Tuple
 
+import cv2
 import librosa
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,6 +49,18 @@ def load_csv(csv_path: str, header: Any = None) -> pd.DataFrame:
 def save_csv(data: Any, csv_path: str):
     """Save data in a csv file."""
     pd.DataFrame(data).to_csv(csv_path, header=False, index=False)
+
+
+def load_frames(video_path: str) -> List[np.array]:
+    video_clip = cv2.VideoCapture(video_path)
+    frames = []
+    for _ in range(int(video_clip.get(7))):
+        _, frame = video_clip.read()
+        if frame is None:
+            break
+        frames.append(frame)
+
+    return frames
 
 
 @rank_zero_only
@@ -141,3 +154,81 @@ def compute_bbox_iou(bboxes: np.array, bbox: np.array) -> np.array:
     iou = overlaps / (areas_1 + areas_2 - overlaps)
 
     return iou
+
+
+def write_clip(frames: List[np.array], output_filename: str, fps: float = 24):
+    """Write a clip in `mp4` format from a list of frames.
+
+    :param frames: 1st dim frame index, 2nd dim frame to be stacked
+        together (must be the same dimensions).
+    :param output_filename: file name of the saved output.
+    :param fps: wanted frame per second rate.
+    """
+    frame_height, frame_width = frames[0].shape[:2]
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    # Initialize the video writer
+    clip = cv2.VideoWriter(
+        output_filename,
+        fourcc,
+        fps,
+        (frame_width, frame_height),
+    )
+    # Write each frame
+    for frame in frames:
+        clip.write(frame)
+
+    # Release the video writer
+    clip.release()
+
+
+def pad_frame(frame: np.array, grid_dims: Tuple[int, int]) -> np.array:
+    """Pad frame to have dimensions divisble by `grid_dims`."""
+    frame_height, frame_width = frame.shape[:2]
+    n_row, n_col = grid_dims
+
+    padding_height = (n_row - frame_height % n_row) % n_row
+    # Check if `padding_height` is not divisible by 2
+    if padding_height % 2:
+        before_padding_height = padding_height // 2
+        after_padding_height = padding_height // 2 + 1
+    else:
+        before_padding_height = padding_height // 2
+        after_padding_height = padding_height // 2
+
+    padding_width = (n_col - frame_width % n_col) % n_col
+    # Check if `padding_width` is not divisible by 2
+    if padding_width % 2:
+        before_padding_width = padding_width // 2
+        after_padding_width = padding_width // 2 + 1
+    else:
+        before_padding_width = padding_width // 2
+        after_padding_width = padding_width // 2
+
+    pad_dims = [
+        (before_padding_height, after_padding_height),
+        (before_padding_width, after_padding_width),
+    ]
+    if len(frame.shape) == 3:
+        pad_dims.append((0, 0))
+
+    padded_frame = np.pad(frame, pad_dims, mode="edge")
+
+    return padded_frame
+
+
+def get_patches(frame: np.array, grid_dims: Tuple[int, int]) -> np.array:
+    """Split a frame into a grid of patches according to `grid_dims`."""
+    padded_frame = pad_frame(frame, grid_dims)
+
+    frame_height, frame_width = padded_frame.shape[:2]
+    n_row, n_col = grid_dims
+    y_stride, x_stride = frame_height // n_row, frame_width // n_col
+
+    patches = [[None for _ in range(n_col)] for _ in range(n_row)]
+    for i, y in enumerate(range(0, frame_height, y_stride)):
+        for j, x in enumerate(range(0, frame_width, x_stride)):
+            x_slice = slice(x, x + x_stride)
+            y_slice = slice(y, y + y_stride)
+            patches[i][j] = padded_frame[y_slice, x_slice]
+
+    return np.array(patches)
