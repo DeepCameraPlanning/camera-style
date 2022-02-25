@@ -1,42 +1,42 @@
-from typing import Tuple
+# from typing import Tuple
 
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
-from src.datamodules.datasets.base_dataset import BaseDataset
+from src.datamodules.datasets.flow_dataset import TripletFlowDataset
 
 
-class BaseDataModule(LightningDataModule):
+class TripletFlowDataModule(LightningDataModule):
     """Initialize train, val and test base data loader.
 
-    :param dataset_dir: path to the dataset directory.
-    :param frame_size: resizing target height and width.
-    :param norm_mean: pixel RGB mean.
-    :param norm_std: pixel RGB standard deviation.
+    :param unity_dir: path to the directory with precomputed Unity flows.
+    :param raft_dir: path to the directory with precomputed RAFT flows.
     :param n_frames: number of frames in a sample (fixed by the model).
+    # :param norm_mean: pixel RGB mean.
+    # :param norm_std: pixel RGB standard deviation.
     :param batch_size: size of batches.
     :param num_workers: number of workers.
     """
 
     def __init__(
         self,
-        dataset_dir: str,
+        unity_dir: str,
+        raft_dir: str,
         n_frames: int,
-        frame_size: int,
-        norm_mean: Tuple[float, float, float],
-        norm_std: Tuple[float, float, float],
+        # norm_mean: Tuple[float, float, float],
+        # norm_std: Tuple[float, float, float],
         batch_size: int,
         num_workers: int,
     ):
         super().__init__()
 
-        self._dataset_dir = dataset_dir
+        self._unity_dir = unity_dir
+        self._raft_dir = raft_dir
 
-        self._frame_size = frame_size
-        self._norm_mean = norm_mean
-        self._norm_std = norm_std
         self._n_frames = n_frames
+        # self._norm_mean = norm_mean
+        # self._norm_std = norm_std
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -54,10 +54,11 @@ class BaseDataModule(LightningDataModule):
 
     def train_dataloader(self) -> DataLoader:
         """Load train set loader."""
-        self.train_set = BaseDataset(
-            dataset_dir=self._dataset_dir,
-            set_mode="train",
+        self.train_set = TripletFlowDataset(
+            unity_dir=self._unity_dir,
+            raft_dir=self._raft_dir,
             n_frames=self._n_frames,
+            transform=None,
         )
 
         return DataLoader(
@@ -69,10 +70,11 @@ class BaseDataModule(LightningDataModule):
 
     def val_dataloader(self) -> DataLoader:
         """Load val set loader."""
-        self.val_set = BaseDataset(
-            dataset_dir=self._dataset_dir,
-            set_mode="val",
+        self.val_set = TripletFlowDataset(
+            unity_dir=self._unity_dir,
+            raft_dir=self._raft_dir,
             n_frames=self._n_frames,
+            transform=None,
         )
 
         return DataLoader(
@@ -83,10 +85,11 @@ class BaseDataModule(LightningDataModule):
 
     def test_dataloader(self) -> DataLoader:
         """Load test set loader."""
-        self.test_set = BaseDataset(
-            dataset_dir=self._dataset_dir,
-            set_mode="test",
+        self.test_set = TripletFlowDataset(
+            unity_dir=self._unity_dir,
+            raft_dir=self._raft_dir,
             n_frames=self._n_frames,
+            transform=None,
         )
 
         return DataLoader(
