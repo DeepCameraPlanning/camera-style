@@ -2,13 +2,13 @@
 
 ## Installation
 
-Python 3.7.10
-Cuda 11.2
+Python 3.9.7
+Cuda 11.5
 
 1. Setup a conda environment:
 ```
-conda create --name movie-style python=3.7 pip
-conda activate movie-style
+conda create --name camera-style python=3.9 pip
+conda activate camera-style
 ```
 
 2. To install required modules and load pre-trained models launch the following commands (`LIB_DIR` is a **global** path to a directory that will contain all downloaded external modules and must be outside of the current repository):

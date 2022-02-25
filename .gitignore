@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 /models
-/data
+/data*
+/notebooks
