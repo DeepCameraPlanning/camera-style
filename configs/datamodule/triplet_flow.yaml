@@ -1,0 +1,3 @@
+n_classes: 2
+unity_dir: ${data_dir}/flow_unity
+raft_dir: ${data_dir}/flow_raft_pth

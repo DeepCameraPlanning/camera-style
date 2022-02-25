@@ -1,0 +1,38 @@
+defaults:
+  - _self_
+  - compnode: light_1n_1g_8b.yaml
+  - model: triplet_i3d.yaml
+  - datamodule: triplet_flow.yaml
+
+num_epochs: 10
+
+# Type of run to launch (current: train/debug, TODO: eval/infer/...)
+run_type: train
+
+root: ${hydra:runtime.cwd}
+# Path to folder with outputs and logs
+output_dir: ${hydra:run.dir}
+# Path to folder with data
+data_dir: ${data_dir}
+# Path to folder for testing (junk folder)
+test_dir: ${root}/tests
+# Path to folder with pre-trained models
+model_dir: ${root}/models
+# Path to folder with pre-trained models
+result_dir: ${root}/results
+
+# Name of the project is accessed by loggers
+project_name: automatic-editing
+# Name of the run is accessed by loggers
+xp_name: null
+# Wether to synced the logs or not (WandB)
+log_offline: false
+# Metric to monitor to save models
+checkpoint_metric: "val/precision"
+
+# Seed for random number generators
+seed: 1
+# Pretty print config at the start of the run using Rich library
+print_config: True
+# Disable (or not) python warnings
+ignore_warnings: True

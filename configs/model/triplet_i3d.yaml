@@ -1,0 +1,16 @@
+module_name: triplet_i3d
+
+pretrained_path: ${model_dir}/flow_imagenet.pt
+checkpoint: null
+optimizer: sgd
+softmax: false
+learning_rate: 5e-3
+weight_decay: 1e-4
+momentum: 0.9
+
+freeze: false
+
+n_frames: 16
+frame_size: 224
+norm_mean: [0.45, 0.45, 0.45]
+norm_std: [0.225, 0.225, 0.225]
