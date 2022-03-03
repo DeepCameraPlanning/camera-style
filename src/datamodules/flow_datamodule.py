@@ -1,52 +1,80 @@
-# from typing import Tuple
+from functools import partial
+import os.path as osp
 
 from pytorch_lightning import LightningDataModule
+import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from torchvision.transforms import CenterCrop, Compose, Lambda  # Normalize
 
 from src.datamodules.datasets.flow_dataset import TripletFlowDataset
+from src.utils.utils import xy_to_polar, polar_to_xy, load_pickle
 
 
 class TripletFlowDataModule(LightningDataModule):
     """Initialize train, val and test base data loader.
 
-    :param unity_dir: path to the directory with precomputed Unity flows.
-    :param raft_dir: path to the directory with precomputed RAFT flows.
+    :param split_dir: path to the directory with train/val/test splits.
+    :param unity_dir: path to the directory with Unity flows.
+    :param prcpt_dir: path to the directory with precomputed flows.
     :param n_frames: number of frames in a sample (fixed by the model).
-    # :param norm_mean: pixel RGB mean.
-    # :param norm_std: pixel RGB standard deviation.
+    :param frame_size: frame size to input (resizing)
+    :param unity_mod_max: maximum value of the unity module flow (norm).
+    :param prcpt_mod_max: maximum value of the precomputed module flow (norm).
     :param batch_size: size of batches.
     :param num_workers: number of workers.
     """
 
     def __init__(
         self,
+        split_dir: str,
         unity_dir: str,
-        raft_dir: str,
+        prcpt_dir: str,
         n_frames: int,
-        # norm_mean: Tuple[float, float, float],
-        # norm_std: Tuple[float, float, float],
+        frame_size: int,
+        unity_mod_max: float,
+        prcpt_mod_max: float,
         batch_size: int,
         num_workers: int,
     ):
         super().__init__()
 
+        train_split_path = osp.join(split_dir, "train.pk")
+        self._train_clip_dirnames = load_pickle(train_split_path)
+        val_split_path = osp.join(split_dir, "val.pk")
+        self._val_clip_dirnames = load_pickle(val_split_path)
+        test_split_path = osp.join(split_dir, "test.pk")
+        self._test_clip_dirnames = load_pickle(test_split_path)
+
         self._unity_dir = unity_dir
-        self._raft_dir = raft_dir
+        self._prcpt_dir = prcpt_dir
 
         self._n_frames = n_frames
-        # self._norm_mean = norm_mean
-        # self._norm_std = norm_std
+        self._frame_size = frame_size
+        self._unity_mod_max = unity_mod_max
+        self._prcpt_mod_max = prcpt_mod_max
 
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def _transform(self) -> Compose:
-        """Video transformations to apply (SoundNet)."""
+    @staticmethod
+    def _scale_module(
+        flows: torch.Tensor,
+        mod_max: float,
+    ) -> torch.Tensor:
+        """Scale module in polar coordinates between -1 adn 1."""
+        scaled_flows = torch.zeros_like(flows)
+        scaled_flows[:, 0] = (2 * (flows[:, 0] - mod_max) / mod_max) + 1
+        scaled_flows[:, 1] = flows[:, 1]
+        return scaled_flows
+
+    def _transform(self, mod_max: float) -> Compose:
+        """Flow transformations to apply (T, C, H, W)."""
         transform_list = [
-            Resize((self._frame_size, self._frame_size)),
-            ToTensor(),
-            Normalize(mean=self._norm_mean, std=self._norm_std),
+            CenterCrop(self._frame_size),
+            xy_to_polar,
+            Lambda(partial(self._scale_module, mod_max=mod_max)),
+            polar_to_xy,
+            # Normalize(mean=norm_mean, std=norm_std),
         ]
         transform = Compose(transform_list)
 
@@ -55,10 +83,12 @@ class TripletFlowDataModule(LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         """Load train set loader."""
         self.train_set = TripletFlowDataset(
+            clip_dirnames=self._train_clip_dirnames,
             unity_dir=self._unity_dir,
-            raft_dir=self._raft_dir,
+            prcpt_dir=self._prcpt_dir,
             n_frames=self._n_frames,
-            transform=None,
+            unity_transforms=self._transform(self._unity_mod_max),
+            prcpt_transforms=self._transform(self._prcpt_mod_max),
         )
 
         return DataLoader(
@@ -71,10 +101,12 @@ class TripletFlowDataModule(LightningDataModule):
     def val_dataloader(self) -> DataLoader:
         """Load val set loader."""
         self.val_set = TripletFlowDataset(
+            clip_dirnames=self._val_clip_dirnames,
             unity_dir=self._unity_dir,
-            raft_dir=self._raft_dir,
+            prcpt_dir=self._prcpt_dir,
             n_frames=self._n_frames,
-            transform=None,
+            unity_transforms=self._transform(self._unity_mod_max),
+            prcpt_transforms=self._transform(self._prcpt_mod_max),
         )
 
         return DataLoader(
@@ -86,10 +118,12 @@ class TripletFlowDataModule(LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         """Load test set loader."""
         self.test_set = TripletFlowDataset(
+            clip_dirnames=self._test_clip_dirnames,
             unity_dir=self._unity_dir,
-            raft_dir=self._raft_dir,
+            prcpt_dir=self._prcpt_dir,
             n_frames=self._n_frames,
-            transform=None,
+            unity_transforms=self._transform(self._unity_mod_max),
+            prcpt_transforms=self._transform(self._prcpt_mod_max),
         )
 
         return DataLoader(

@@ -12,26 +12,32 @@ from src.utils.utils import load_pth
 class TripletFlowDataset(Dataset):
     """Load triplet samples from a precomputed flows.
 
+    :param clip_dirnames: list of clip directory names to load.
     :param unity_dir: path to the directory with precomputed Unity flows.
-    :param raft_dir: path to the directory with precomputed RAFT flows.
-    :param n_frames: number of frames in a sample.
-    :param transform: transformation to apply to frames.
+    :param prcpt_dir: path to the directory with precomputed flows.
+    :param n_frames: number of flow frames in a sample.
+    :param unity_transforms: transformation to apply to unity flows.
+    :param prcpt_transforms: transformation to apply to precomputed flows.
     """
 
     def __init__(
         self,
+        clip_dirnames: str,
         unity_dir: str,
-        raft_dir: str,
+        prcpt_dir: str,
         n_frames: int,
-        transform: Callable,
+        unity_transforms: Callable,
+        prcpt_transforms: Callable,
     ):
         super().__init__()
 
+        self._clip_dirnames = clip_dirnames
         self._unity_dir = unity_dir
-        self._raft_dir = raft_dir
+        self._prcpt_dir = prcpt_dir
 
         self._n_frames = n_frames
-        self._transform = transform
+        self._unity_transforms = unity_transforms
+        self._prcpt_transforms = prcpt_transforms
 
         self._clip_infos = self._get_clip_infos()
         self._sample_infos = self._get_sample_infos()
@@ -45,43 +51,45 @@ class TripletFlowDataset(Dataset):
     @staticmethod
     def _load_flows(
         flow_paths: List[str],
-        transform: Callable,
+        transforms: Callable,
     ) -> torch.Tensor:
-        """Load flows and and apply transformations, shape: (C, T, W, H)."""
+        """
+        Load flows and and apply transformations.
+        Input shape: (T, W, H, C).
+        Output shape: (C, T, W, H).
+        """
         flows = torch.stack(
             [load_pth(flow_path) for flow_path in flow_paths]
-        ).permute([3, 0, 1, 2])
-
-        if transform is not None:
-            flows = [transform(flow) for flow in flows]
+        ).permute([0, 3, 1, 2])
+        flows = transforms(flows) if transforms is not None else flows
+        flows = flows.permute([1, 0, 2, 3])
 
         return flows
 
     def _get_clip_infos(self) -> List[Dict[str, Any]]:
-        """Get Unity and RAFT precomputed flow path for all samples.
+        """Get Unity and prcpt precomputed flow path for all samples.
 
         :return: a list of clips with:
             - `clip_name`: name of the clip.
             - `unity_paths`: paths of the Unity precomputed flows.
-            - `raft_paths`: paths of the RAFT precomputed flows.
+            - `prcpt_paths`: paths of the prcpt precomputed flows.
         """
         clip_infos = []
-        clip_names = os.listdir(self._unity_dir)
-        for clip_dirname in sorted(clip_names):
+        for clip_dirname in sorted(self._clip_dirnames):
             unity_clip_dir = osp.join(self._unity_dir, clip_dirname)
-            raft_clip_dir = osp.join(self._raft_dir, clip_dirname)
+            prcpt_clip_dir = osp.join(self._prcpt_dir, clip_dirname)
 
-            unity_paths, raft_paths = [], []
+            unity_paths, prcpt_paths = [], []
             flow_names = os.listdir(unity_clip_dir)
             for flow_filename in sorted(flow_names):
                 unity_paths.append(osp.join(unity_clip_dir, flow_filename))
-                raft_paths.append(osp.join(raft_clip_dir, flow_filename))
+                prcpt_paths.append(osp.join(prcpt_clip_dir, flow_filename))
 
             clip_infos.append(
                 {
                     "clip_name": clip_dirname,
                     "unity_paths": unity_paths,
-                    "raft_paths": raft_paths,
+                    "prcpt_paths": prcpt_paths,
                 }
             )
 
@@ -105,18 +113,18 @@ class TripletFlowDataset(Dataset):
         for clip_info in self._clip_infos:
             clip_name = clip_info["clip_name"]
             unity_paths = clip_info["unity_paths"]
-            raft_paths = clip_info["raft_paths"]
+            prcpt_paths = clip_info["prcpt_paths"]
 
             unity_gen = self._split_chunks(unity_paths, self._n_frames)
-            raft_gen = self._split_chunks(raft_paths, self._n_frames)
-            for unity_chunk, raft_chunk in zip(unity_gen, raft_gen):
+            prcpt_gen = self._split_chunks(prcpt_paths, self._n_frames)
+            for unity_chunk, prcpt_chunk in zip(unity_gen, prcpt_gen):
                 if len(unity_chunk) != self._n_frames:
                     break
                 chunk_infos = np.array(
                     {
                         "clip_name": clip_name,
                         "unity_chunk_paths": unity_chunk,
-                        "raft_chunk_paths": raft_chunk,
+                        "prcpt_chunk_paths": prcpt_chunk,
                     }
                 ).reshape(1)
                 sample_splits = np.hstack([sample_splits, chunk_infos])
@@ -128,12 +136,12 @@ class TripletFlowDataset(Dataset):
             # Get anchor and positive infos from the current sample
             positive_clipname = positive_sample["clip_name"]
             anchor_paths = positive_sample["unity_chunk_paths"]
-            positive_paths = positive_sample["raft_chunk_paths"]
+            positive_paths = positive_sample["prcpt_chunk_paths"]
             # Select another random sample from a different clip
             clip_mask = sample_clipnames != clip_name
             negative_sample = np.random.choice(sample_splits[clip_mask], 1)[0]
             negative_clipname = negative_sample["clip_name"]
-            negative_paths = negative_sample["raft_chunk_paths"]
+            negative_paths = negative_sample["prcpt_chunk_paths"]
 
             sample_infos.append(
                 {
@@ -162,20 +170,20 @@ class TripletFlowDataset(Dataset):
         """
         sample_info = self._sample_infos[index]
 
-        anchor_paths = sample_info["anchor_paths"]
-        positive_paths = sample_info["positive_paths"]
-        negative_paths = sample_info["negative_paths"]
+        anc_paths = sample_info["anchor_paths"]
+        pos_paths = sample_info["positive_paths"]
+        neg_paths = sample_info["negative_paths"]
 
-        anchor_flows = self._load_flows(anchor_paths, self._transform)
-        positive_flows = self._load_flows(positive_paths, self._transform)
-        negative_flows = self._load_flows(negative_paths, self._transform)
+        anc_flows = self._load_flows(anc_paths, self._unity_transforms)
+        pos_flows = self._load_flows(pos_paths, self._prcpt_transforms)
+        neg_flows = self._load_flows(neg_paths, self._prcpt_transforms)
 
         sample_data = {
             "positive_clipname": sample_info["positive_clipname"],
             "negative_clipname": sample_info["negative_clipname"],
-            "anchor_flows": anchor_flows,
-            "positive_flows": positive_flows,
-            "negative_flows": negative_flows,
+            "anchor_flows": anc_flows,
+            "positive_flows": pos_flows,
+            "negative_flows": neg_flows,
         }
 
         return sample_data

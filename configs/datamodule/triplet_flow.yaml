@@ -1,3 +1,4 @@
 n_classes: 2
-unity_dir: ${data_dir}/flow_unity
+split_dir: ${data_dir}/splits
+unity_dir: ${data_dir}/flow_unity_pth
 raft_dir: ${data_dir}/flow_raft_pth
