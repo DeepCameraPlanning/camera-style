@@ -6,6 +6,7 @@ import os
 import os.path as osp
 from typing import Tuple
 
+from tqdm import tqdm
 import torch
 
 from src.utils.utils import create_dir, load_pickle, save_pth
@@ -33,7 +34,7 @@ def parse_arguments() -> Tuple[str, str]:
 if __name__ == "__main__":
     pk_dir, pth_dir = parse_arguments()
 
-    for pk_filename in os.listdir(pk_dir):
+    for pk_filename in tqdm(os.listdir(pk_dir)):
         # Load whole video flows
         pk_path = osp.join(pk_dir, pk_filename)
         flows = load_pickle(pk_path)

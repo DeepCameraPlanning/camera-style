@@ -76,7 +76,7 @@ def parse_arguments() -> Tuple[str, str]:
     parser.add_argument(
         "frame_dir",
         type=str,
-        help="Path to the directory containing subdir with RGB frames",
+        help="Path to the directory containing subdir with RGB flow frames",
     )
     parser.add_argument(
         "flow_dir",
@@ -95,7 +95,9 @@ if __name__ == "__main__":
     for frame_dirname in os.listdir(frame_rootdir):
         frame_path_pattern = osp.join(frame_rootdir, frame_dirname, "*.png")
         # Load BGR flow frames
-        frames = [cv2.imread(frame) for frame in glob(frame_path_pattern)]
+        frames = [
+            cv2.imread(frame) for frame in sorted(glob(frame_path_pattern))
+        ]
         # Convert flow frame to flow field
         flows = [frame_to_flow(bgr_frame) for bgr_frame in frames]
 

@@ -65,7 +65,7 @@ def save_csv(data: Any, csv_path: str):
 def load_frames_fromdir(video_dir: str) -> List[np.array]:
     """Load BGR frames from a directory of frames."""
     frames = []
-    for frame_filename in os.listdir(video_dir):
+    for frame_filename in sorted(os.listdir(video_dir)):
         frame_path = osp.join(video_dir, frame_filename)
         frames.append(cv2.imread(frame_path))
 
@@ -254,3 +254,27 @@ def get_patches(frame: np.array, grid_dims: Tuple[int, int]) -> np.array:
             patches[i][j] = padded_frame[y_slice, x_slice]
 
     return np.array(patches)
+
+
+def xy_to_polar(xy_flow: torch.Tensor) -> torch.Tensor:
+    """Convert euclidean coordinates to polar coordinates (T, C, W, H)."""
+    theta = torch.atan2(xy_flow[:, 0], xy_flow[:, 1])
+    mod = torch.sqrt(xy_flow[:, 0] ** 2 + xy_flow[:, 1] ** 2)
+
+    polar_flow = torch.zeros_like(xy_flow)
+    polar_flow[:, 0] = mod
+    polar_flow[:, 1] = theta
+
+    return polar_flow
+
+
+def polar_to_xy(polar_flow: torch.Tensor) -> torch.Tensor:
+    """Convert polar coordinates to euclidean coordinates (C, W, H)."""
+    mod = polar_flow[:, 0]
+    theta = polar_flow[:, 1]
+
+    xy_flow = torch.zeros_like(polar_flow)
+    xy_flow[:, 0] = mod * torch.cos(theta)
+    xy_flow[:, 1] = mod * torch.sin(theta)
+
+    return xy_flow

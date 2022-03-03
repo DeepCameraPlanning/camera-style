@@ -46,6 +46,7 @@ class FlowEstimator:
     Estimate flow given two frames.
     Code adapted from: https://github.com/princeton-vl/RAFT.
 
+    :param model_name: name of the OF to use (`raft` or `tvl1`).
     :param model_dir: path to model's directory.
     :param batch_size: how many samples per batch to load.
     :param num_gpus: how many gpus to use for inference.
@@ -56,6 +57,7 @@ class FlowEstimator:
 
     def __init__(
         self,
+        model_name: str = "tvl1",
         model_dir: str = "./models",
         batch_size: int = 1,
         num_gpus: int = 1,
@@ -71,31 +73,34 @@ class FlowEstimator:
             pl.utilities.distributed.log.setLevel(logging.ERROR)
             enable_progress_bar = False
 
-        self._checkpoint_filename = osp.join(model_dir, "raft-things.pth")
-        self._state_dict = {
-            "model." + parameter_name[7:]: parameters
-            for parameter_name, parameters in torch.load(
-                self._checkpoint_filename
-            ).items()
-        }
-        model = RAFTModel().eval()
-        model.load_state_dict(self._state_dict)
-        self.model = model
-        self.trainer = Trainer(
-            gpus=num_gpus,
-            num_nodes=num_nodes,
-            # strategy="dp",
-            logger=False,
-            enable_progress_bar=enable_progress_bar,
-        )
+        self.model_name = model_name
+        if self.model_name == "raft":
+            self._checkpoint_filename = osp.join(model_dir, "raft-things.pth")
+            self._state_dict = {
+                "model." + parameter_name[7:]: parameters
+                for parameter_name, parameters in torch.load(
+                    self._checkpoint_filename
+                ).items()
+            }
+            model = RAFTModel().eval()
+            model.load_state_dict(self._state_dict)
+            self.model = model
+            self.trainer = Trainer(
+                gpus=num_gpus,
+                num_nodes=num_nodes,
+                # strategy="dp",
+                logger=False,
+                enable_progress_bar=enable_progress_bar,
+            )
+        elif self.model_name == "tvl1":
+            self.model = cv2.optflow.DualTVL1OpticalFlow_create()
 
     @staticmethod
-    def _preprocess_frames(frames: List[np.array]) -> List[torch.Tensor]:
+    def _raft_preprocess_frames(frames: List[np.array]) -> List[torch.Tensor]:
         """
-        Pre-process a list of frames:
-            - Pad in order to have dimensions divisible by 8;
-            - Resize;
-            - Convert to RGB.
+        Pre-process a list of RGB frames:
+            # - Pad in order to have dimensions divisible by 8;
+            # - Resize;
         """
         height, width = frames[0].shape[:2]
         preprocesser = transforms.Compose(
@@ -106,10 +111,7 @@ class FlowEstimator:
             ]
         )
         processed_frames = torch.stack(
-            [
-                preprocesser(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)) * 255
-                for frame in frames
-            ]
+            [preprocesser(frame) * 255 for frame in frames]
         )
         padder = InputPadder(processed_frames[0].shape)
         processed_frames = padder.pad(processed_frames)[0]
@@ -117,7 +119,7 @@ class FlowEstimator:
         return processed_frames
 
     @staticmethod
-    def _postprocess_flows(
+    def _raft_postprocess_flows(
         flows: torch.Tensor, original_dims: Tuple[int, int]
     ) -> List[np.array]:
         """Resize a list of optical flow estimations to original frame dims."""
@@ -128,21 +130,31 @@ class FlowEstimator:
     def estimate_flow(self, frames: List[np.array]) -> List[np.array]:
         """
         Estimate flow between two frames given a list of consecutive frames.
-        Code adapted from:https://github.com/princeton-vl/RAFT.
+        Code adapted from: https://github.com/princeton-vl/RAFT.
 
-        :param frames: list of BGR frames.
+        :param frames: list of RGB frames.
         :return: list estimated flows.
         """
-        preprocessed_frames = self._preprocess_frames(frames)
-        frame_loader = DataLoader(
-            list(zip(preprocessed_frames[:-1], preprocessed_frames[1:])),
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-        )
-        flows = torch.vstack(self.trainer.predict(self.model, frame_loader))
+        if self.model_name == "raft":
+            preprocessed_frames = self._raft_preprocess_frames(frames)
+            frame_loader = DataLoader(
+                list(zip(preprocessed_frames[:-1], preprocessed_frames[1:])),
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+            )
+            flows = torch.vstack(
+                self.trainer.predict(self.model, frame_loader)
+            )
 
-        original_dims = frames[0].shape[:2]
-        flows = self._postprocess_flows(flows, original_dims)
+            original_dims = frames[0].shape[:2]
+            flows = self._raft_postprocess_flows(flows, original_dims)
+
+        elif self.model_name == "tvl1":
+            gray_frames = [cv2.cvtColor(f, cv2.COLOR_RGB2GRAY) for f in frames]
+            flows = [
+                self.model.calc(prev, curr, None)
+                for prev, curr in zip(gray_frames[:-1], gray_frames[1:])
+            ]
 
         return flows
 
@@ -150,10 +162,6 @@ class FlowEstimator:
         """Convert the output of the model to a BGR frame."""
         flowed_frame = flow_to_image(flow, convert_to_bgr=True)
         return flowed_frame
-
-    def frame_to_flow(self, frame: np.array) -> np.array:
-        """ "Convert a Unity OF frame to a flow field."""
-        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
 
 class MotionModel(LightningModule):
