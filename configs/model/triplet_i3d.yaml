@@ -12,5 +12,5 @@ freeze: false
 
 n_frames: 16
 frame_size: 224
-norm_mean: [0.45, 0.45, 0.45]
-norm_std: [0.225, 0.225, 0.225]
+unity_mod_max: 26
+raft_mod_max: 69

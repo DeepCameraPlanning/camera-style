@@ -11,29 +11,31 @@ from src.models.triplet_i3d import TripletI3DModel
 def train(config: DictConfig):
     # Initialize dataset
     data_module = TripletFlowDataModule(
+        split_dir=config.datamodule.split_dir,
         unity_dir=config.datamodule.unity_dir,
-        raft_dir=config.datamodule.raft_dir,
+        prcpt_dir=config.datamodule.raft_dir,
         n_frames=config.model.n_frames,
-        # norm_mean=config.model.norm_mean,
-        # norm_std=config.model.norm_std,
+        frame_size=config.model.frame_size,
+        unity_mod_max=config.model.unity_mod_max,
+        prcpt_mod_max=config.model.raft_mod_max,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )
 
-    # # Initialize callbacks
-    # wandb_logger = WandbLogger(
-    #     name=config.xp_name,
-    #     project=config.project_name,
-    #     offline=config.log_offline,
-    # )
-    # checkpoint = ModelCheckpoint(
-    #     monitor=config.checkpoint_metric,
-    #     mode="max",
-    #     save_last=True,
-    #     dirpath="checkpoints",
-    #     filename=config.xp_name + "-{epoch}-{val_loss:.2f}",
-    # )
-    # lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    # Initialize callbacks
+    wandb_logger = WandbLogger(
+        name=config.xp_name,
+        project=config.project_name,
+        offline=config.log_offline,
+    )
+    checkpoint = ModelCheckpoint(
+        monitor=config.checkpoint_metric,
+        mode="max",
+        save_last=True,
+        dirpath="checkpoints",
+        filename=config.xp_name + "-{epoch}-{val_loss:.2f}",
+    )
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
     # Initialize model
     model_params = {
@@ -44,6 +46,7 @@ def train(config: DictConfig):
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
+        "batch_size": config.compnode.batch_size,
     }
     model = TripletI3DModel(**model_params)
 
@@ -52,8 +55,8 @@ def train(config: DictConfig):
         num_nodes=config.compnode.num_nodes,
         accelerator=config.compnode.accelerator,
         max_epochs=config.num_epochs,
-        # callbacks=[lr_monitor, checkpoint],
-        # logger=wandb_logger,
+        callbacks=[lr_monitor, checkpoint],
+        logger=wandb_logger,
         log_every_n_steps=5,
         # precision=16,
     )

@@ -1,4 +1,4 @@
-batch_size: 16
+batch_size: 4
 num_workers: 10
 num_gpus: 1
 num_nodes: 1

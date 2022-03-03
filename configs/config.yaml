@@ -6,7 +6,7 @@ defaults:
 
 num_epochs: 10
 
-# Type of run to launch (current: train/debug, TODO: eval/infer/...)
+# Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
 
 root: ${hydra:runtime.cwd}
@@ -22,13 +22,13 @@ model_dir: ${root}/models
 result_dir: ${root}/results
 
 # Name of the project is accessed by loggers
-project_name: automatic-editing
+project_name: camera-style-features
 # Name of the run is accessed by loggers
 xp_name: null
 # Wether to synced the logs or not (WandB)
 log_offline: false
 # Metric to monitor to save models
-checkpoint_metric: "val/precision"
+checkpoint_metric: "val/loss"
 
 # Seed for random number generators
 seed: 1
