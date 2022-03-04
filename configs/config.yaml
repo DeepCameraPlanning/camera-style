@@ -4,7 +4,7 @@ defaults:
   - model: triplet_i3d.yaml
   - datamodule: triplet_flow.yaml
 
-num_epochs: 10
+num_epochs: 100
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
@@ -29,6 +29,8 @@ xp_name: null
 log_offline: false
 # Metric to monitor to save models
 checkpoint_metric: "val/loss"
+# Directory to save model checkpoints
+checkpoint_dirpath: "${root}/checkpoints"
 
 # Seed for random number generators
 seed: 1

@@ -49,7 +49,7 @@ class TripletI3DModel(LightningModule):
 
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Extract features from anchor, positive and negative flows, and compute
         the triplet loss between these outputs.
@@ -64,13 +64,21 @@ class TripletI3DModel(LightningModule):
 
         loss = self.criterion(anchor_out, positive_out, negative_out)
 
-        return loss
+        outputs = {
+            "positive_clipname": batch["positive_clipname"],
+            "negative_clipname": batch["negative_clipname"],
+            "anchor": anchor_out,
+            "positive": positive_out,
+            "negative": negative_out,
+        }
+
+        return loss, outputs
 
     def training_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Training loop."""
-        loss = self._shared_eval_step(batch, batch_idx)
+        loss, _ = self._shared_eval_step(batch, batch_idx)
         self._shared_log_step("train", loss)
 
         return {"loss": loss}
@@ -79,7 +87,7 @@ class TripletI3DModel(LightningModule):
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Validation loop."""
-        loss = self._shared_eval_step(batch, batch_idx)
+        loss, _ = self._shared_eval_step(batch, batch_idx)
         self._shared_log_step("val", loss)
 
         return {"loss": loss}
@@ -88,9 +96,33 @@ class TripletI3DModel(LightningModule):
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Test loop."""
-        loss = self._shared_eval_step(batch, batch_idx)
+        loss, outputs = self._shared_eval_step(batch, batch_idx)
 
-        return {"loss": loss}
+        return {"loss": loss, "out": outputs}
+
+    def test_epoch_end(self, outputs: torch.Tensor):
+        """Gather all test outputs."""
+        positive_clipnames, negative_clipnames = [], []
+        anchor_out, positive_out, negative_out = [], [], []
+        for out in outputs:
+            positive_clipnames.extend(out["out"]["positive_clipname"])
+            negative_clipnames.extend(out["out"]["negative_clipname"])
+            anchor_out.append(out["out"]["anchor"])
+            positive_out.append(out["out"]["positive"])
+            negative_out.append(out["out"]["negative"])
+        anchor = torch.cat(anchor_out)
+        positive = torch.cat(positive_out)
+        negative = torch.cat(negative_out)
+
+        self.test_outputs = {
+            "positive_clipnames": positive_clipnames,
+            "negative_clipnames": negative_clipnames,
+            "anchor": anchor.cpu(),
+            "positive": positive.cpu(),
+            "negative": negative.cpu(),
+        }
+
+        return outputs
 
     def configure_optimizers(self) -> Tuple[List[Any], List[Any]]:
         """Define optimizers and LR schedulers."""
