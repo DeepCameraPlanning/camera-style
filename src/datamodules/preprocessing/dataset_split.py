@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from sklearn.model_selection import train_test_split
 
-from src.utils.utils import create_dir, save_pickle
+from src.utils.utils import create_dir, save_csv
 
 
 def parse_arguments() -> str:
@@ -47,10 +47,10 @@ if __name__ == "__main__":
     train_files, val_files, test_files = split_dataset(raw_dir)
     val_files.append("pan")
 
-    train_split_path = osp.join(split_dir, "train.pk")
-    val_split_path = osp.join(split_dir, "val.pk")
-    test_split_path = osp.join(split_dir, "test.pk")
+    train_split_path = osp.join(split_dir, "train.csv")
+    val_split_path = osp.join(split_dir, "val.csv")
+    test_split_path = osp.join(split_dir, "test.csv")
 
-    save_pickle(train_files, train_split_path)
-    save_pickle(val_files, val_split_path)
-    save_pickle(test_files, test_split_path)
+    save_csv(train_files, train_split_path)
+    save_csv(val_files, val_split_path)
+    save_csv(test_files, test_split_path)

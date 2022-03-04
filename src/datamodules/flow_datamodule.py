@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import CenterCrop, Compose, Lambda  # Normalize
 
 from src.datamodules.datasets.flow_dataset import TripletFlowDataset
-from src.utils.utils import xy_to_polar, polar_to_xy, load_pickle
+from src.utils.utils import xy_to_polar, polar_to_xy, load_csv
 
 
 class TripletFlowDataModule(LightningDataModule):
@@ -38,12 +38,12 @@ class TripletFlowDataModule(LightningDataModule):
     ):
         super().__init__()
 
-        train_split_path = osp.join(split_dir, "train.pk")
-        self._train_clip_dirnames = load_pickle(train_split_path)
-        val_split_path = osp.join(split_dir, "val.pk")
-        self._val_clip_dirnames = load_pickle(val_split_path)
-        test_split_path = osp.join(split_dir, "test.pk")
-        self._test_clip_dirnames = load_pickle(test_split_path)
+        train_split_path = osp.join(split_dir, "train.csv")
+        self._train_clip_dirnames = load_csv(train_split_path)[0].tolist()
+        val_split_path = osp.join(split_dir, "val.csv")
+        self._val_clip_dirnames = load_csv(val_split_path)[0].tolist()
+        test_split_path = osp.join(split_dir, "test.csv")
+        self._test_clip_dirnames = load_csv(test_split_path)[0].tolist()
 
         self._unity_dir = unity_dir
         self._prcpt_dir = prcpt_dir
@@ -63,7 +63,8 @@ class TripletFlowDataModule(LightningDataModule):
     ) -> torch.Tensor:
         """Scale module in polar coordinates between -1 adn 1."""
         scaled_flows = torch.zeros_like(flows)
-        scaled_flows[:, 0] = (2 * (flows[:, 0] - mod_max) / mod_max) + 1
+        # scaled_flows[:, 0] = (2 * (flows[:, 0] - mod_max) / mod_max) + 1
+        scaled_flows[:, 0] = torch.ones_like(scaled_flows[:, 0])
         scaled_flows[:, 1] = flows[:, 1]
         return scaled_flows
 

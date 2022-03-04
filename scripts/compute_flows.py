@@ -65,17 +65,9 @@ if __name__ == "__main__":
         video_path = osp.join(video_dir, video_id)
         # Load frames and convert them from BRG to RGB
         frames = [
-            cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+            cv2.resize(cv2.cvtColor(f, cv2.COLOR_BGR2RGB), (224, 224))
             for f in load_frames_fromdir(video_path)
         ]
-        forward_flow_path = osp.join(save_dir, video_id + ".pk")
-        # if not osp.exists(forward_flow_path):
-        forward_flows = flow_estimator.estimate_flow(frames)
-        save_pickle(forward_flows, forward_flow_path)
-
-        # backward_flow_path = osp.join(
-        #     save_dir, "backward_flows", video_id[:-3] + "pk"
-        # )
-        # # if not osp.exists(backward_flow_path):
-        # backward_flows = flow_estimator.estimate_flow(frames[::-1])[::-1]
-        # save_pickle(backward_flows, backward_flow_path)
+        flow_path = osp.join(save_dir, video_id + ".pk")
+        flows = flow_estimator.estimate_flow(frames)
+        save_pickle(flows, flow_path)

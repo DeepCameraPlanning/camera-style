@@ -9,56 +9,85 @@ import os.path as osp
 from typing import Tuple
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 import torch
 
 from src.utils.utils import create_dir, save_pth
 
 
-def bgr_to_hsv(bgr_frame: np.array) -> np.array:
+def divide(a: np.array, b: np.array) -> np.array:
+    res = np.divide(
+        a,
+        b,
+        out=np.zeros_like(a, dtype=np.float64),
+        where=(b != 0),
+    )
+    return res
+
+
+def rgb_to_hsv(bgr_frame: np.array) -> Tuple[np.array, np.array, np.array]:
     """
-    Convert a BGR frame to a HSV frame.
+    Convert a RGB frame to a HSV frame.
     Adapted from: https://github.com/opencv/opencv/blob/17234f82d025e3bbfbf61
     1089637e5aa2038e7b8/3rdparty/openexr/Imath/ImathColorAlgo.cpp
     """
-    r_channel = bgr_frame[:, :, 2]
-    b_channel = bgr_frame[:, :, 1]
-    g_channel = bgr_frame[:, :, 1]
+    r_index, g_index, b_index = 0, 1, 2
+    r_channel = bgr_frame[:, :, r_index]
+    g_channel = bgr_frame[:, :, g_index]
+    b_channel = bgr_frame[:, :, b_index]
 
     max_channel_arg = np.argmax(bgr_frame, axis=-1)
     max_channel = np.max(bgr_frame, axis=-1)
     min_channel = np.min(bgr_frame, axis=-1)
     range_channel = max_channel - min_channel
+    zero_channel = np.zeros_like(r_channel, dtype=np.float64)
+    sat = zero_channel
+    hue = zero_channel
+
     val = max_channel
-    sat = np.zeros(r_channel.shape)
-    hue = np.zeros(r_channel.shape)
-
     sat = np.multiply(max_channel != 0, range_channel / max_channel)
-    h_red = np.multiply(
-        max_channel_arg == 0, (g_channel - b_channel) / range_channel
-    )
-    h_blue = np.multiply(
-        max_channel_arg == 1, 2 + (b_channel - r_channel) / range_channel
-    )
-    h_green = np.multiply(
-        max_channel_arg == 2, 4 + (r_channel - g_channel) / range_channel
-    )
-    hue = (h_red + h_blue + h_green) / 6
-    hue = np.multiply(hue < 0, 1)
 
-    return np.stack([hue, sat, val], axis=-1)
+    sat_mask = sat != 0
+    # Case 1: max channel is red
+    h_r = np.multiply(
+        sat_mask,
+        np.multiply(
+            max_channel_arg == r_index,
+            divide(g_channel - b_channel, range_channel),
+        ),
+    )
+    # Case 2: max channel is green
+    h_g = np.multiply(
+        sat_mask,
+        np.multiply(
+            max_channel_arg == g_index,
+            2 + divide(b_channel - r_channel, range_channel),
+        ),
+    )
+    # Case 3: max channel is blue
+    h_b = np.multiply(
+        sat_mask,
+        np.multiply(
+            max_channel_arg == b_index,
+            4 + divide(r_channel - g_channel, range_channel),
+        ),
+    )
+    hue = np.multiply(sat_mask, (h_r + h_b + h_g) / 6)
+    hue += np.multiply(sat_mask, np.multiply(hue < 0, 1))
+
+    return hue, sat, val
 
 
-def frame_to_flow(bgr_frame: np.array) -> np.array:
-    """Convert a BGR flow frame into flow field."""
+def frame_to_flow(rgb_frame: np.array) -> np.array:
+    """Convert a RGB flow frame into flow field."""
     # Convert BGR frame to HSV
-    hsv_frame = bgr_to_hsv(bgr_frame)
-    hue = hsv_frame[:, :, 0]
-    value = hsv_frame[:, :, 2]
+    hue, _, val = rgb_to_hsv(rgb_frame)
 
     # Get polar module and angle from hue and value encoding
     theta = (2 * hue + 1) * np.pi
-    r = value / 10
+    r = val / 10
 
     # Convert polar coordinates to euclidean coordinates
     x = r * np.cos(theta)
@@ -92,11 +121,12 @@ if __name__ == "__main__":
     frame_rootdir, flow_rootdir = parse_arguments()
 
     # Iterate over the different directories containing flow frames
-    for frame_dirname in os.listdir(frame_rootdir):
+    for frame_dirname in tqdm(os.listdir(frame_rootdir)):
         frame_path_pattern = osp.join(frame_rootdir, frame_dirname, "*.png")
         # Load BGR flow frames
         frames = [
-            cv2.imread(frame) for frame in sorted(glob(frame_path_pattern))
+            cv2.resize(plt.imread(frame), (224, 224))
+            for frame in sorted(glob(frame_path_pattern))
         ]
         # Convert flow frame to flow field
         flows = [frame_to_flow(bgr_frame) for bgr_frame in frames]
