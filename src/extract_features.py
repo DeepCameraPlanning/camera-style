@@ -5,7 +5,7 @@ from pytorch_lightning import Trainer
 
 from src.datamodules.flow_datamodule import TripletFlowDataModule
 from src.models.triplet_i3d import TripletI3DModel
-from src.utils.utils import create_dir, save_pickle
+from src.utils.file_utils import create_dir, save_pickle
 
 
 def extract_features(config: DictConfig):
@@ -16,8 +16,6 @@ def extract_features(config: DictConfig):
         prcpt_dir=config.datamodule.raft_dir,
         n_frames=config.model.n_frames,
         frame_size=config.model.frame_size,
-        unity_mod_max=config.model.unity_mod_max,
-        prcpt_mod_max=config.model.raft_mod_max,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )

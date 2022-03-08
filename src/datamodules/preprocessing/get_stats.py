@@ -5,7 +5,8 @@ from typing import Tuple
 
 import torch
 
-from src.utils.utils import xy_to_polar
+from src.utils.flow_utils import FlowUtils
+from src.datamodules.preprocessing.flow_transforms import ResizeFlow
 
 Stats = Tuple[
     Tuple[float, float],
@@ -24,14 +25,21 @@ def parse_arguments() -> str:
         type=str,
         help="Path to the pth flow directory",
     )
+    parser.add_argument(
+        "--frame-size",
+        "-f",
+        type=float,
+        default=224,
+        help="Resizing size",
+    )
 
     args = parser.parse_args()
 
-    return args.pth_dir
+    return args.pth_dir, args.frame_size
 
 
 def print_stats(stats: Stats, coordinates: str):
-    """ """
+    """Display stats."""
     c1, c2 = ("x", "y") if coordinates == "xy" else ("r", "theta")
     mins, maxs, means, stds = stats
     print(f"min : {c1}={mins[0]:7.2f} - {c2}={mins[1]:7.2f} ")
@@ -41,7 +49,12 @@ def print_stats(stats: Stats, coordinates: str):
 
 
 def get_stats(xy_flows: torch.Tensor) -> Tuple[Stats]:
-    """ """
+    """Compute xy and polar min/max/mean/std."""
+    F = FlowUtils()
+    polar_flows = torch.stack(
+        [F.xy_to_polar(flow.permute([1, 2, 0])) for flow in xy_flows]
+    )
+
     # Get stats in Euclidean coordinates
     x_flows, y_flows = xy_flows[:, 0], xy_flows[:, 1]
     xy_flows_mins = (x_flows.min().item(), y_flows.min().item())
@@ -51,8 +64,7 @@ def get_stats(xy_flows: torch.Tensor) -> Tuple[Stats]:
     xy_stats = xy_flows_mins, xy_flows_maxs, xy_flows_means, xy_flows_stds
 
     # Get stats in polar coordinates
-    polar_flows = xy_to_polar(xy_flows)
-    m_flows, a_flows = polar_flows[:, 0], polar_flows[:, 1]
+    m_flows, a_flows = polar_flows[:, :, :, 0], polar_flows[:, :, :, 1]
     po_flows_mins = (m_flows.min().item(), a_flows.min().item())
     po_flows_maxs = (m_flows.max().item(), a_flows.max().item())
     po_flows_means = (m_flows.mean().item(), a_flows.mean().item())
@@ -64,13 +76,14 @@ def get_stats(xy_flows: torch.Tensor) -> Tuple[Stats]:
 
 if __name__ == "__main__":
     flows = []
-    pth_dir = parse_arguments()
+    pth_dir, frame_size = parse_arguments()
+    resizer = ResizeFlow((frame_size, frame_size))
     for flow_dirname in os.listdir(pth_dir):
         flow_dirpath = osp.join(pth_dir, flow_dirname)
         for flow_filename in sorted(os.listdir(flow_dirpath)):
             flow_path = osp.join(flow_dirpath, flow_filename)
-            flows.append(torch.load(flow_path))
-    flows = torch.stack(flows).permute([0, 3, 1, 2])
+            flows.append(resizer(torch.load(flow_path)))
+    flows = torch.stack(flows)
 
     xy_stats, po_stats = get_stats(flows)
     print("XY stats:")

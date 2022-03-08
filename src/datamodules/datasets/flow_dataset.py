@@ -1,12 +1,12 @@
 import os
 import os.path as osp
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.utils.utils import load_pth
+from src.utils.file_utils import load_pth
 
 
 class TripletFlowDataset(Dataset):
@@ -16,8 +16,6 @@ class TripletFlowDataset(Dataset):
     :param unity_dir: path to the directory with precomputed Unity flows.
     :param prcpt_dir: path to the directory with precomputed flows.
     :param n_frames: number of flow frames in a sample.
-    :param unity_transforms: transformation to apply to unity flows.
-    :param prcpt_transforms: transformation to apply to precomputed flows.
     """
 
     def __init__(
@@ -26,8 +24,6 @@ class TripletFlowDataset(Dataset):
         unity_dir: str,
         prcpt_dir: str,
         n_frames: int,
-        unity_transforms: Callable,
-        prcpt_transforms: Callable,
     ):
         super().__init__()
 
@@ -36,8 +32,6 @@ class TripletFlowDataset(Dataset):
         self._prcpt_dir = prcpt_dir
 
         self._n_frames = n_frames
-        self._unity_transforms = unity_transforms
-        self._prcpt_transforms = prcpt_transforms
 
         self._clip_infos = self._get_clip_infos()
         self._sample_infos = self._get_sample_infos()
@@ -49,20 +43,10 @@ class TripletFlowDataset(Dataset):
             yield array[i : i + chunk_size]
 
     @staticmethod
-    def _load_flows(
-        flow_paths: List[str],
-        transforms: Callable,
-    ) -> torch.Tensor:
-        """
-        Load flows and and apply transformations.
-        Input shape: (T, W, H, C).
-        Output shape: (C, T, W, H).
-        """
-        flows = torch.stack(
-            [load_pth(flow_path) for flow_path in flow_paths]
-        ).permute([0, 3, 1, 2])
-        flows = transforms(flows) if transforms is not None else flows
-        flows = flows.permute([1, 0, 2, 3])
+    def _load_flows(flow_paths: List[str]) -> torch.Tensor:
+        """Load flows. Output shape: (C, T, W, H)."""
+        flows = torch.stack([load_pth(flow_path) for flow_path in flow_paths])
+        flows = flows.permute([3, 0, 1, 2])
 
         return flows
 
@@ -174,9 +158,9 @@ class TripletFlowDataset(Dataset):
         pos_paths = sample_info["positive_paths"]
         neg_paths = sample_info["negative_paths"]
 
-        anc_flows = self._load_flows(anc_paths, self._unity_transforms)
-        pos_flows = self._load_flows(pos_paths, self._prcpt_transforms)
-        neg_flows = self._load_flows(neg_paths, self._prcpt_transforms)
+        anc_flows = self._load_flows(anc_paths)
+        pos_flows = self._load_flows(pos_paths)
+        neg_flows = self._load_flows(neg_paths)
 
         sample_data = {
             "positive_clipname": sample_info["positive_clipname"],

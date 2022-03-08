@@ -12,7 +12,7 @@ import subprocess
 
 from tqdm import tqdm
 
-from src.utils.utils import create_dir
+from src.utils.file_utils import create_dir
 
 
 def parse_arguments() -> Tuple[str, str]:
@@ -25,15 +25,10 @@ def parse_arguments() -> Tuple[str, str]:
         help="Path to the directory containing `raw_all`, `flow_frames` and "
         + "`raw_frames` directories.",
     )
-    parser.add_argument(
-        "clip_dirname",
-        type=str,
-        help="Name of the directory to process.",
-    )
 
     args = parser.parse_args()
 
-    return args.root_dir, args.clip_dirname
+    return args.root_dir
 
 
 def copy_rename_files(all_dir: str, flow_dir: str, frame_dir: str):
@@ -53,12 +48,14 @@ def copy_rename_files(all_dir: str, flow_dir: str, frame_dir: str):
 
 
 if __name__ == "__main__":
-    root_dir, clip_dirname = parse_arguments()
-    raw_all_dir = osp.join(root_dir, "raw_all", clip_dirname)
-    flow_frames_dir = osp.join(root_dir, "flow_frames", clip_dirname)
-    raw_frames_dir = osp.join(root_dir, "raw_frames", clip_dirname)
+    root_dir = parse_arguments()
+    root_all_dir = osp.join(root_dir, "raw_all")
+    for clip_dirname in os.listdir(root_all_dir):
+        raw_all_dir = osp.join(root_all_dir, clip_dirname)
+        flow_frames_dir = osp.join(root_dir, "flow_frames", clip_dirname)
+        raw_frames_dir = osp.join(root_dir, "raw_frames", clip_dirname)
 
-    create_dir(flow_frames_dir)
-    create_dir(raw_frames_dir)
+        create_dir(flow_frames_dir)
+        create_dir(raw_frames_dir)
 
-    copy_rename_files(raw_all_dir, flow_frames_dir, raw_frames_dir)
+        copy_rename_files(raw_all_dir, flow_frames_dir, raw_frames_dir)

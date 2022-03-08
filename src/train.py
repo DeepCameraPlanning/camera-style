@@ -16,8 +16,6 @@ def train(config: DictConfig):
         prcpt_dir=config.datamodule.raft_dir,
         n_frames=config.model.n_frames,
         frame_size=config.model.frame_size,
-        unity_mod_max=config.model.unity_mod_max,
-        prcpt_mod_max=config.model.raft_mod_max,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )

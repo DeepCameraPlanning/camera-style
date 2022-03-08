@@ -2,7 +2,7 @@ defaults:
   - _self_
   - compnode: light_1n_1g_8b.yaml
   - model: triplet_i3d.yaml
-  - datamodule: triplet_flow.yaml
+  - datamodule: maxnorm_flow.yaml
 
 num_epochs: 100
 
