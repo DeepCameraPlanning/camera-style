@@ -15,7 +15,7 @@ conda activate camera-style
 ```
 ./setup/setup_env.sh
 ./setup/load_models.sh
-LIB_DIR=path/to/dir ./setup/load_lib.sh
+LIB_DIR=/path/to/dir ./setup/load_lib.sh
 python ./setup/confifg_test.py
 ```
 
@@ -36,3 +36,37 @@ This project use the following external modules:
  - [depth-distillation](https://github.com/vinthony/depth-distillation)
  - [RAFT](https://github.com/princeton-vl/RAFT)
  - [motion-detection](https://github.com/robincourant/motion-detection)
+
+# Dataset structure
+
+```
+data_unity/
+├── flow_*flow-type*_pk/           # pickle external flows
+├── flow_*flow-type*_pth/          # pth external flows
+├── flow_*flow-type*_maxnorm_pth/  # max-norm preprocessed pth external flows
+├── flow_*flow-type*_unit_pth/     # unit preprocessed pth external flows
+├── flow_*flow-type*_videos/       # mp4 external flows
+│
+├── flow_unity_pth/                # pth unity flows
+├── flow_unity_maxnorm_pth/        # max-norm preprocessed pth unity flows
+├── flow_unity_unit_pth/           # unit preprocessed pth unity flows
+├── flow_unity_videos/             # mp4 unity flows
+│
+├── raw_unity/
+│   ├── archives/                  # archives files
+│   ├── flow_frames/               # png unity flows
+│   ├── raw_all/                   # unity depth, OF, raw frames
+│   └── raw_frames/                # png unity raw frames
+│
+├── raw_videos/                    # mp4 raw frames
+│
+└── splits/                        # train/val/test splits
+    ├── test.csv
+    ├── train.csv
+    └── val.csv
+```
+
+Run the following command to preprocess flows:
+```
+ROOT_DIR=/path/to/data_unity ./setup/preprocess_flows.sh
+```
