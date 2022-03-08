@@ -5,8 +5,8 @@ import os.path as osp
 import cv2
 from tqdm import tqdm
 
-from features.motion_detector import FlowEstimator
-from src.utils.utils import (
+from features.core.motion_detector import FlowEstimator
+from src.utils.file_utils import (
     create_dir,
     save_pickle,
     load_pickle,
@@ -60,12 +60,12 @@ if __name__ == "__main__":
     else:
         video_ids = load_pickle(video_ids_filename)
 
-    flow_estimator = FlowEstimator(model_name=model_name, batch_size=16)
+    flow_estimator = FlowEstimator(model_name=model_name, batch_size=4)
     for video_id in tqdm(video_ids):
         video_path = osp.join(video_dir, video_id)
         # Load frames and convert them from BRG to RGB
         frames = [
-            cv2.resize(cv2.cvtColor(f, cv2.COLOR_BGR2RGB), (224, 224))
+            cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
             for f in load_frames_fromdir(video_path)
         ]
         flow_path = osp.join(save_dir, video_id + ".pk")

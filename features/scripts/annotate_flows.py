@@ -4,8 +4,8 @@ import os.path as osp
 
 import torch
 
-from features.motion_detector import FlowEstimator
-from src.utils.utils import create_dir, write_clip
+from features.core.motion_detector import FlowEstimator
+from src.utils.file_utils import create_dir, write_clip
 
 
 def parse_arguments():

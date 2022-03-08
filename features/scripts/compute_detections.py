@@ -4,8 +4,8 @@ import os.path as osp
 
 from tqdm import tqdm
 
-from features.people_detector import PeopleDetector
-from src.utils.utils import save_pickle, load_frames, load_pickle
+from features.core.people_detector import PeopleDetector
+from src.utils.file_utils import save_pickle, load_frames, load_pickle
 
 
 def parse_arguments():

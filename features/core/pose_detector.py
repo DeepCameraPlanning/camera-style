@@ -14,7 +14,7 @@ from torchvision.transforms import ToTensor
 from lib.dope.model import dope_resnet50
 from lib.dope.postprocess import assign_hands_and_head_to_body
 from lib.lcrnet_v2_improved_ppi.lcr_net_ppi_improved import LCRNet_PPI_improved
-from src.utils.utils import compute_bbox_iou
+from src.utils.features_utils import compute_bbox_iou
 
 
 class PoseModel(LightningModule):

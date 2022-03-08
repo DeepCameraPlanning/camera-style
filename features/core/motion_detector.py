@@ -159,8 +159,8 @@ class FlowEstimator:
         return flows
 
     def flow_to_frame(self, flow: np.array) -> np.array:
-        """Convert the output of the model to a BGR frame."""
-        flowed_frame = flow_to_image(flow, convert_to_bgr=True)
+        """Convert the output of the model to a RGB frame."""
+        flowed_frame = flow_to_image(flow, convert_to_bgr=False)
         return flowed_frame
 
 
