@@ -15,6 +15,7 @@ def train(config: DictConfig):
         unity_dir=config.datamodule.unity_dir,
         prcpt_dir=config.datamodule.raft_dir,
         n_frames=config.model.n_frames,
+        stride=config.model.stride,
         frame_size=config.model.frame_size,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
@@ -28,7 +29,7 @@ def train(config: DictConfig):
     )
     checkpoint = ModelCheckpoint(
         monitor=config.checkpoint_metric,
-        mode="max",
+        mode="min",
         save_last=True,
         dirpath=config.checkpoint_dirpath,
         filename=config.xp_name + "-{epoch}-{val_loss:.2f}",
@@ -56,7 +57,7 @@ def train(config: DictConfig):
         callbacks=[lr_monitor, checkpoint],
         logger=wandb_logger,
         log_every_n_steps=5,
-        # precision=16,
+        precision=16,
     )
 
     # Launch model training
