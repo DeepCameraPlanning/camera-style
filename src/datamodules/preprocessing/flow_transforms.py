@@ -135,7 +135,7 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
     )
     parser.add_argument(
         "--max-module",
-        "--m",
+        "-m",
         type=float,
         default=None,
         help="Target size to resize frames",

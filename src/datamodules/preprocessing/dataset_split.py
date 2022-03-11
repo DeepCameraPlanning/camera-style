@@ -37,7 +37,7 @@ def parse_arguments() -> Tuple[str, str, str, bool]:
     )
     args = parser.parse_args()
 
-    return args.raw_dir, args.split_dir, args.augment, args.test
+    return args.raw_dir, args.split_dir, args.augment_dir, args.test
 
 
 def split_dataset(
@@ -45,8 +45,6 @@ def split_dataset(
 ) -> Tuple[List[str], List[str], List[str]]:
     """Split clips into train/val (0.8/0.2) or train/val/test (0.6/0.2/0.2)."""
     raw_files = sorted(os.listdir(raw_dir))
-    if augment_dir is not None:
-        raw_files += sorted(os.listdir(augment_dir))
 
     if test_set:
         trainval_files, test_files = train_test_split(
@@ -60,16 +58,27 @@ def split_dataset(
         train_files, val_files = train_test_split(
             raw_files, test_size=0.2, random_state=32
         )
-        test_files = []
+        test_files = val_files
+
+    if augment_dir is not None:
+        for filename in train_files:
+            reversed_filename = "reversed_" + filename
+            if osp.exists(osp.join(augment_dir, reversed_filename)):
+                train_files.append(reversed_filename)
+            speedup_filename = "speedup_" + filename
+            if osp.exists(osp.join(augment_dir, speedup_filename)):
+                train_files.append(speedup_filename)
 
     return train_files, val_files, test_files
 
 
 if __name__ == "__main__":
-    raw_dir, split_dir, test = parse_arguments()
+    raw_dir, split_dir, augment_dir, test = parse_arguments()
     create_dir(split_dir)
 
-    train_files, val_files, test_files = split_dataset(raw_dir, test)
+    train_files, val_files, test_files = split_dataset(
+        raw_dir, augment_dir, test
+    )
 
     train_split_path = osp.join(split_dir, "train.csv")
     val_split_path = osp.join(split_dir, "val.csv")
