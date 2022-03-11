@@ -16,7 +16,7 @@ from torchvision import transforms
 from lib.motion_detection.estimators.model import MLP
 
 # Avoid local import issues
-root_dir = [os.sep] + osp.dirname(osp.abspath(__file__)).split(os.sep)[:-1]
+root_dir = [os.sep] + osp.dirname(osp.abspath(__file__)).split(os.sep)[:-2]
 import_dir = ["lib", "RAFT", "core"]
 sys.path.append(osp.join(*root_dir + import_dir))
 from raft import RAFT
