@@ -10,12 +10,13 @@ from src.utils.file_utils import load_pth
 
 
 class TripletFlowDataset(Dataset):
-    """Load triplet samples from a precomputed flows.
+    """Load triplet samples from precomputed flows.
 
     :param clip_dirnames: list of clip directory names to load.
     :param unity_dir: path to the directory with precomputed Unity flows.
     :param prcpt_dir: path to the directory with precomputed flows.
     :param n_frames: number of flow frames in a sample.
+    :param stride: number of flow frames between 2 consecutive samples.
     """
 
     def __init__(
@@ -24,6 +25,7 @@ class TripletFlowDataset(Dataset):
         unity_dir: str,
         prcpt_dir: str,
         n_frames: int,
+        stride: int,
     ):
         super().__init__()
 
@@ -32,14 +34,15 @@ class TripletFlowDataset(Dataset):
         self._prcpt_dir = prcpt_dir
 
         self._n_frames = n_frames
+        self._stride = stride
 
         self._clip_infos = self._get_clip_infos()
         self._sample_infos = self._get_sample_infos()
 
     @staticmethod
-    def _split_chunks(array: List[Any], chunk_size: int):
+    def _split_chunks(array: List[Any], stride: int, chunk_size: int):
         """Yield successive n-sized chunks from `array`."""
-        for i in range(0, len(array), chunk_size):
+        for i in range(0, len(array), stride):
             yield array[i : i + chunk_size]
 
     @staticmethod
@@ -99,14 +102,22 @@ class TripletFlowDataset(Dataset):
             unity_paths = clip_info["unity_paths"]
             prcpt_paths = clip_info["prcpt_paths"]
 
-            unity_gen = self._split_chunks(unity_paths, self._n_frames)
-            prcpt_gen = self._split_chunks(prcpt_paths, self._n_frames)
-            for unity_chunk, prcpt_chunk in zip(unity_gen, prcpt_gen):
+            unity_gen = self._split_chunks(
+                unity_paths, self._stride, self._n_frames
+            )
+            prcpt_gen = self._split_chunks(
+                prcpt_paths, self._stride, self._n_frames
+            )
+            for chunk_index, chunks in enumerate(zip(unity_gen, prcpt_gen)):
+                unity_chunk, prcpt_chunk = chunks
                 if len(unity_chunk) != self._n_frames:
                     break
+                frame_start = self._n_frames * chunk_index
+                frame_end = frame_start + self._n_frames - 1
                 chunk_infos = np.array(
                     {
-                        "clip_name": clip_name,
+                        "clip_name": clip_name
+                        + f"/{frame_start:04}-{frame_end:04}",
                         "unity_chunk_paths": unity_chunk,
                         "prcpt_chunk_paths": prcpt_chunk,
                     }

@@ -15,13 +15,13 @@ def extract_features(config: DictConfig):
         unity_dir=config.datamodule.unity_dir,
         prcpt_dir=config.datamodule.raft_dir,
         n_frames=config.model.n_frames,
+        stride=config.model.stride,
         frame_size=config.model.frame_size,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )
 
     # Initialize model
-
     model_params = {
         "checkpoint_path": config.model.checkpoint_path,
         "pretrained_path": None,
@@ -39,7 +39,7 @@ def extract_features(config: DictConfig):
         gpus=config.compnode.num_gpus,
         num_nodes=config.compnode.num_nodes,
         accelerator=config.compnode.accelerator,
-        # precision=16,
+        precision=16,
     )
 
     # Launch model training
