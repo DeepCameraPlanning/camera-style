@@ -93,7 +93,7 @@ class SingleFlowDataset(Dataset):
             for chunk_index, flow_chunk in enumerate(flow_gen):
                 if len(flow_chunk) != self._n_frames:
                     break
-                frame_start = self._n_frames * chunk_index
+                frame_start = self._stride * chunk_index
                 frame_end = frame_start + self._n_frames - 1
                 chunk_infos = np.array(
                     {

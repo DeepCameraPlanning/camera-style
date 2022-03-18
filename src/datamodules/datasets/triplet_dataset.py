@@ -112,7 +112,7 @@ class TripletFlowDataset(Dataset):
                 unity_chunk, prcpt_chunk = chunks
                 if len(unity_chunk) != self._n_frames:
                     break
-                frame_start = self._n_frames * chunk_index
+                frame_start = self._stride * chunk_index
                 frame_end = frame_start + self._n_frames - 1
                 chunk_infos = np.array(
                     {
