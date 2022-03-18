@@ -33,15 +33,18 @@ def extract_features(config: DictConfig):
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
     }
-    extractor = TripletI3DModel.load_from_checkpoint(**model_params).model
-    extractor = extractor.eval()
+    device = "cuda" if config.compnode.num_gpus > 0 else "cpu"
+
+    extractor = TripletI3DModel.load_from_checkpoint(**model_params)
+    extractor = extractor.to(device)
 
     extracted_features = {}
     for batch in tqdm(data_loader):
+        flows = batch["flows"].to(device)
         with torch.no_grad():
-            batch_output = extractor.extract_features(batch["flows"]).squeeze()
+            batch_output = extractor.model.extract_features(flows).squeeze()
         for clipname, feature in zip(batch["clipname"], batch_output):
-            extracted_features[clipname] = feature
+            extracted_features[clipname] = feature.to("cpu")
 
     # Save the test ouptuts
     create_dir(config.result_dir)
