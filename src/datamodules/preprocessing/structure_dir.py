@@ -32,7 +32,7 @@ def parse_arguments() -> Tuple[str, str]:
 
 
 def copy_rename_files(all_dir: str, flow_dir: str, frame_dir: str):
-    """Copiy and rename flow and RGB frames."""
+    """Copy and rename flow and RGB frames."""
     for filename in tqdm(sorted(os.listdir(all_dir))):
         if "_flow.png" in filename:
             flow_filename = filename.split("_")[1] + ".png"
