@@ -34,6 +34,19 @@ def save_pickle(data: Any, pickle_path: str):
         pickle.dump(data, f, protocol=4)
 
 
+def load_txt(txt_path: str):
+    """Load a txt file."""
+    with open(txt_path, "r") as f:
+        data = f.read()
+    return data
+
+
+def save_txt(data: str, txt_path: str):
+    """Save data in a txt file."""
+    with open(txt_path, "w") as f:
+        f.write(data)
+
+
 def load_pth(pth_path: str) -> Any:
     """Load a pth (PyTorch) file."""
     data = torch.load(pth_path)
