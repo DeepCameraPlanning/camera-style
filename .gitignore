@@ -129,9 +129,9 @@ dmypy.json
 .pyre/
 
 /models
-/data*
+/data
 /notebooks
-/outputs
-/checkpoints
-/results
+*/outputs
+*/checkpoints
+*/results
 /visualizations
