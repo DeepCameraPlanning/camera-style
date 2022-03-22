@@ -1,0 +1,8 @@
+module_name: latent_cross_attention
+
+checkpoint_path: ${checkpoint_dirpath}/last.ckpt
+optimizer: adam
+loss: giou
+learning_rate: 1e-3
+weight_decay: 1e-4
+momentum: 0.9
