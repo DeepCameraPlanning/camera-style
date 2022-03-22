@@ -131,3 +131,7 @@ dmypy.json
 /models
 /data*
 /notebooks
+/outputs
+/checkpoints
+/results
+/visualizations

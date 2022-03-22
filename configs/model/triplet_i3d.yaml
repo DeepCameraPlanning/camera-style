@@ -1,0 +1,17 @@
+module_name: triplet_i3d
+
+pretrained_path: ${model_dir}/flow_imagenet.pt
+checkpoint_path: ${checkpoint_dirpath}/last.ckpt
+optimizer: adam
+softmax: false
+learning_rate: 1e-3
+weight_decay: 1e-4
+momentum: 0.9
+
+freeze: false
+
+n_frames: 16
+stride: 16
+frame_size: 224
+unity_mod_max: 0.14
+raft_mod_max: 165.53
