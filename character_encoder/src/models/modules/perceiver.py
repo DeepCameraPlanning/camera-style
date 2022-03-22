@@ -103,7 +103,7 @@ class Attention(nn.Module):
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
 
-        self.scale = dim_head**-0.5
+        self.scale = dim_head ** -0.5
         self.heads = heads
 
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
@@ -143,7 +143,7 @@ class Attention(nn.Module):
 # main class
 
 
-class CrossPerceiver(nn.Module):
+class LatentCrossAttention(nn.Module):
     def __init__(
         self,
         *,
@@ -232,6 +232,7 @@ class CrossPerceiver(nn.Module):
                 Reduce("b n d -> b d", "mean"),
                 nn.LayerNorm(latent_dim),
                 nn.Linear(latent_dim, num_classes),
+                nn.Sigmoid(),
             )
             if final_classifier_head
             else nn.Identity()
@@ -273,9 +274,6 @@ class CrossPerceiver(nn.Module):
         # Concat to channels of data and flatten axis
         data = rearrange(data, "b ... d -> b (...) d")
         x = repeat(latents, "n d -> b n d", b=data.shape[0])
-        import ipdb
-
-        ipdb.set_trace()
 
         # Layers
         for cross_attn, cross_ff in self.layers:
@@ -290,17 +288,17 @@ class CrossPerceiver(nn.Module):
         return self.to_logits(x)
 
 
-def make_cross_perceiver() -> nn.Module:
+def make_latent_ca() -> nn.Module:
     """Load a latent cross attention model."""
-    model = CrossPerceiver(
+    model = LatentCrossAttention(
         input_channels=2,
         input_axis=2,
         num_freq_bands=6,
         max_freq=10.0,
-        depth=2,
+        depth=1,
         latent_dim=1024,
         cross_heads=1,
-        cross_dim_head=64,
+        cross_dim_head=32,
         num_classes=4,
         attn_dropout=0.0,
         ff_dropout=0.0,

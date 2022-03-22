@@ -2,17 +2,18 @@ from typing import Any, Dict, List, Tuple
 
 from omegaconf.dictconfig import DictConfig
 import torch
-from torch.nn import TripletMarginLoss
+from torch.nn import SmoothL1Loss
 from pytorch_lightning import LightningModule
 
-from character_encoder.src.models.modules.perceiver import make_cross_perceiver
+from character_encoder.src.models.modules.global_iou import GIOULoss
+from character_encoder.src.models.modules.perceiver import make_latent_ca
 
 
 class LatentCharacterModel(LightningModule):
     def __init__(
         self,
         model_config: DictConfig,
-        num_classes: int,
+        loss: str,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -26,11 +27,13 @@ class LatentCharacterModel(LightningModule):
         self._weight_decay = weight_decay
         self._momentum = momentum
         self._batch_size = batch_size
-        self.criterion = TripletMarginLoss()
+        if loss == "smoothl1":
+            self.criterion = SmoothL1Loss()
+        elif loss == "giou":
+            self.criterion = GIOULoss()
 
         self._model_config = model_config
-        self._num_classes = num_classes
-        self.model = make_cross_perceiver()
+        self.model = make_latent_ca()
 
     def _shared_log_step(self, mode: str, loss: torch.Tensor):
         """Log metrics at each epoch and each step for the training."""
@@ -49,26 +52,22 @@ class LatentCharacterModel(LightningModule):
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """
-        Extract features from anchor, positive and negative flows, and compute
-        the triplet loss between these outputs.
-        """
-        anchor_flows = batch["anchor_flows"].float()
-        positive_flows = batch["positive_flows"].float()
-        negative_flows = batch["negative_flows"].float()
+        """Input flow feature and character mask, output bbox coordinates."""
+        input_feature = batch["input_feature"]
+        input_character_mask = batch["input_character_mask"]
+        target_bbox = batch["target_bbox"]
 
-        anchor_out = self.model.extract_features(anchor_flows)
-        positive_out = self.model.extract_features(positive_flows)
-        negative_out = self.model.extract_features(negative_flows)
-
-        loss = self.criterion(anchor_out, positive_out, negative_out)
+        predicted_bbox = self.model(input_feature, input_character_mask)
+        target_bbox = target_bbox.type(predicted_bbox.dtype)
+        loss = self.criterion(predicted_bbox, target_bbox)
 
         outputs = {
-            "positive_clipname": batch["positive_clipname"],
-            "negative_clipname": batch["negative_clipname"],
-            "anchor": anchor_out,
-            "positive": positive_out,
-            "negative": negative_out,
+            "clip_name": batch["clip_name"],
+            "keyframe_indices": batch["keyframe_indices"],
+            "input_feature": input_feature,
+            "input_character_mask": input_character_mask,
+            "target_bbox": target_bbox,
+            "predicted_bbox": predicted_bbox,
         }
 
         return loss, outputs
@@ -99,26 +98,30 @@ class LatentCharacterModel(LightningModule):
 
         return {"loss": loss, "out": outputs}
 
-    def test_epoch_end(self, outputs: torch.Tensor):
+    def test_epoch_end(self, outputs: torch.Tensor) -> Dict[str, Any]:
         """Gather all test outputs."""
-        positive_clipnames, negative_clipnames = [], []
-        anchor_out, positive_out, negative_out = [], [], []
+        clip_names, keyframe_indices = [], []
+        input_features, input_character_masks = [], []
+        target_bboxes, predicted_bboxes = [], []
         for out in outputs:
-            positive_clipnames.extend(out["out"]["positive_clipname"])
-            negative_clipnames.extend(out["out"]["negative_clipname"])
-            anchor_out.append(out["out"]["anchor"])
-            positive_out.append(out["out"]["positive"])
-            negative_out.append(out["out"]["negative"])
-        anchor = torch.cat(anchor_out)
-        positive = torch.cat(positive_out)
-        negative = torch.cat(negative_out)
+            clip_names.extend(out["out"]["clip_name"])
+            keyframe_indices.extend(out["out"]["keyframe_indices"])
+            input_features.append(out["out"]["input_feature"])
+            input_character_masks.append(out["out"]["input_character_mask"])
+            target_bboxes.append(out["out"]["target_bbox"])
+            predicted_bboxes.append(out["out"]["predicted_bbox"])
+        input_features = torch.cat(input_features)
+        input_character_masks = torch.cat(input_character_masks)
+        target_bboxes = torch.cat(target_bboxes)
+        predicted_bboxes = torch.cat(predicted_bboxes)
 
         self.test_outputs = {
-            "positive_clipnames": positive_clipnames,
-            "negative_clipnames": negative_clipnames,
-            "anchor": anchor.cpu(),
-            "positive": positive.cpu(),
-            "negative": negative.cpu(),
+            "clip_names": clip_names,
+            "keyframe_indices": keyframe_indices,
+            "input_features": input_features.cpu(),
+            "input_character_masks": input_character_masks.cpu(),
+            "target_bboxes": target_bboxes.cpu(),
+            "predicted_bboxes": predicted_bboxes.cpu(),
         }
 
         return outputs
