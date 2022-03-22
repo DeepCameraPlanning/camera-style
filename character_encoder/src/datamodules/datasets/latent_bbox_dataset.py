@@ -13,10 +13,10 @@ from utils.file_utils import load_pth, load_pickle
 class LatentBboxDataset(Dataset):
     """Load pre-computed flow features, flow frames, and bounding-boxes.
 
-    :param clip_dirnames:
-    :param bbox_dir:
-    :param feature_dir:
-    :param flow_dir:
+    :param clip_dirnames: list of clip directory names to load.
+    :param bbox_dir: directory containing pre-extracted detections.
+    :param feature_dir: directory containing pre-extracted flow features.
+    :param flow_dir: directory containing pre-compute flow frames.
     """
 
     def __init__(
@@ -62,7 +62,7 @@ class LatentBboxDataset(Dataset):
     def _load_character_mask(
         flow: torch.Tensor, bboxes: List[np.array]
     ) -> torch.Tensor:
-        """ """
+        """Load a flow frame and mask what's outside of bboxes."""
         height, width, _ = flow.shape
         character_mask = torch.zeros_like(flow)
         for bbox in bboxes:
@@ -119,10 +119,11 @@ class LatentBboxDataset(Dataset):
         are randomly selected among samples of another clip.
 
         :return: a map from (`clip_name`, `sample_index`) to:
-            - `frame_indices`:
-            - `feature_path`:
-            - `flow_paths`:
-            - `bboxes`:
+            - `keyframe_index`: index of the keyframe in the chunk.
+            - `feature_path`: path to flow feature of the chunk.
+            - `flow_paths`: path to flow frames of the chunk.
+            - `bboxes`: path to bboxes of the chunk.
+            And return also the list of all (`clip_name`, `sample_index`).
         """
         sample_infos, sample_keys = {}, []
         for clip_info in self._clip_infos:
@@ -164,11 +165,11 @@ class LatentBboxDataset(Dataset):
         """Return the `index`-th sample.
 
         :return: a sample with:
-            - `clip_name`:
-            - `keyframe_indices`:
-            - `input_feature`:
-            - `input_character_mask`:
-            - `target_bbox`:
+            - `clip_name`: name of clip.
+            - `keyframe_indices`: indices of input and target chunk keyframes.
+            - `input_feature`: flow feature of the input chunk.
+            - `input_character_mask`: char mask of the input chunk keyframe.
+            - `target_bbox`: bbox coordinates of the target chunk keyframe.
         """
         clip_name, sample_index = self._sample_keys[index]
 
