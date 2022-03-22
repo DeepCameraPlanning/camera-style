@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Tuple
 
-from omegaconf.dictconfig import DictConfig
 import torch
 from torch.nn import TripletMarginLoss
 from pytorch_lightning import LightningModule
@@ -12,8 +11,6 @@ class TripletI3DModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
-        model_config: DictConfig,
-        num_classes: int,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -29,8 +26,6 @@ class TripletI3DModel(LightningModule):
         self._batch_size = batch_size
         self.criterion = TripletMarginLoss()
 
-        self._model_config = model_config
-        self._num_classes = num_classes
         self.model = make_flow_i3d(pretrained_path)
 
     def _shared_log_step(self, mode: str, loss: torch.Tensor):
@@ -100,7 +95,7 @@ class TripletI3DModel(LightningModule):
 
         return {"loss": loss, "out": outputs}
 
-    def test_epoch_end(self, outputs: torch.Tensor):
+    def test_epoch_end(self, outputs: torch.Tensor) -> Dict[str, Any]:
         """Gather all test outputs."""
         positive_clipnames, negative_clipnames = [], []
         anchor_out, positive_out, negative_out = [], [], []

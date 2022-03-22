@@ -39,8 +39,6 @@ def train(config: DictConfig):
     # Initialize model
     model_params = {
         "pretrained_path": config.model.pretrained_path,
-        "model_config": config.model,
-        "num_classes": config.datamodule.n_classes,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
