@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import torch
 
-from src.utils.diverse_utils import divide
+from utils.diverse_utils import divide
 
 
 class FlowUtils:

@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from sklearn.model_selection import train_test_split
 
-from src.utils.file_utils import create_dir, save_csv
+from utils.file_utils import create_dir, save_csv
 
 
 def parse_arguments() -> Tuple[str, str, str, bool]:
