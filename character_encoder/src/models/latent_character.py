@@ -33,7 +33,7 @@ class LatentCharacterModel(LightningModule):
             self.criterion = GIOULoss()
 
         self._model_config = model_config
-        self.model = make_latent_ca()
+        self.model = make_latent_ca(**model_config)
 
     def _shared_log_step(self, mode: str, loss: torch.Tensor):
         """Log metrics at each epoch and each step for the training."""

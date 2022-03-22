@@ -288,22 +288,22 @@ class LatentCrossAttention(nn.Module):
         return self.to_logits(x)
 
 
-def make_latent_ca() -> nn.Module:
+def make_latent_ca(**kwargs) -> nn.Module:
     """Load a latent cross attention model."""
     model = LatentCrossAttention(
         input_channels=2,
         input_axis=2,
-        num_freq_bands=6,
-        max_freq=10.0,
-        depth=1,
+        num_freq_bands=kwargs["num_freq_bands"],
+        max_freq=kwargs["max_freq"],
+        depth=kwargs["depth"],
         latent_dim=1024,
-        cross_heads=1,
-        cross_dim_head=32,
+        cross_heads=kwargs["cross_heads"],
+        cross_dim_head=kwargs["cross_dim_head"],
         num_classes=4,
-        attn_dropout=0.0,
-        ff_dropout=0.0,
-        weight_tie_layers=False,
-        fourier_encode_data=True,
-        final_classifier_head=True,
+        attn_dropout=kwargs["attn_dropout"],
+        ff_dropout=kwargs["ff_dropout"],
+        weight_tie_layers=kwargs["weight_tie_layers"],
+        fourier_encode_data=kwargs["fourier_encode_data"],
+        final_classifier_head=kwargs["final_classifier_head"],
     )
     return model
