@@ -4,9 +4,11 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
 
-from src.datamodules.datasets.single_dataset import SingleFlowDataset
-from src.models.triplet_i3d import TripletI3DModel
-from src.utils.file_utils import create_dir, save_pickle
+from flow_encoder.src.datamodules.datasets.single_dataset import (
+    SingleFlowDataset,
+)
+from flow_encoder.src.models.triplet_i3d import TripletI3DModel
+from utils.file_utils import create_dir, save_pickle
 
 
 def extract_features(config: DictConfig):

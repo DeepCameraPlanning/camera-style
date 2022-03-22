@@ -5,7 +5,7 @@ import torch
 from torch.nn import TripletMarginLoss
 from pytorch_lightning import LightningModule
 
-from src.models.modules.i3d import make_flow_i3d
+from flow_encoder.src.models.modules.i3d import make_flow_i3d
 
 
 class TripletI3DModel(LightningModule):

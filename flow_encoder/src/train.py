@@ -4,8 +4,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
-from src.datamodules.flow_datamodule import TripletFlowDataModule
-from src.models.triplet_i3d import TripletI3DModel
+from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
+from flow_encoder.src.models.triplet_i3d import TripletI3DModel
 
 
 def train(config: DictConfig):

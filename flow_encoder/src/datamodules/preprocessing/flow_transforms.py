@@ -8,8 +8,8 @@ import torch
 from torchvision.transforms import Compose, ToTensor
 import torchvision.transforms.functional as F
 
-from src.utils.file_utils import create_dir, load_pth, save_pth
-from src.utils.flow_utils import FlowUtils
+from utils.file_utils import create_dir, load_pth, save_pth
+from utils.flow_utils import FlowUtils
 
 
 class ResizeFlow(torch.nn.Module):

@@ -5,7 +5,7 @@ import subprocess
 import torch
 import numpy as np
 
-from src.utils.file_utils import create_dir
+from utils.file_utils import create_dir
 
 
 def speedup_clip(input_dir: str, save_dir: str):

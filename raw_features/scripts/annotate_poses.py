@@ -7,9 +7,9 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from features.core.pose_detector import PoseEstimator
-from features.core.people_detector import PeopleDetector
-from src.utils.file_utils import load_frames, load_pickle, write_clip
+from raw_features.core.pose_detector import PoseEstimator
+from raw_features.core.people_detector import PeopleDetector
+from utils.file_utils import load_frames, load_pickle, write_clip
 from lib.dope.visu import visualize_bodyhandface2d
 
 

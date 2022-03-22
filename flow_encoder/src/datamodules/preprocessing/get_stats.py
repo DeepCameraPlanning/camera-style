@@ -5,8 +5,10 @@ from typing import Tuple
 
 import torch
 
-from src.utils.flow_utils import FlowUtils
-from src.datamodules.preprocessing.flow_transforms import ResizeFlow
+from utils.flow_utils import FlowUtils
+from flow_encoder.src.datamodules.preprocessing.flow_transforms import (
+    ResizeFlow,
+)
 
 Stats = Tuple[
     Tuple[float, float],

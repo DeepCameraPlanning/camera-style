@@ -6,27 +6,27 @@ from omegaconf import DictConfig
 def main(config: DictConfig):
 
     if config.get("print_config"):
-        from src.utils.diverse_utils import print_config
+        from utils.diverse_utils import print_config
 
         print_config(config, resolve=True)
 
     if config.run_type == "train":
-        from src.train import train
+        from flow_encoder.src.train import train
 
         train(config)
 
     elif config.run_type == "extract_apn":
-        from src.extract_apn import extract_features
+        from flow_encoder.src.extract_apn import extract_features
 
         extract_features(config)
 
     elif config.run_type == "extract_external":
-        from src.extract_external import extract_features
+        from flow_encoder.src.extract_external import extract_features
 
         extract_features(config)
 
     elif config.run_type == "debug":
-        from src.debug import debug
+        from flow_encoder.src.debug import debug
 
         debug(config)
 

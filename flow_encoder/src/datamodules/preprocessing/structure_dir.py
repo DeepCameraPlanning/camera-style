@@ -12,7 +12,7 @@ import subprocess
 
 from tqdm import tqdm
 
-from src.utils.file_utils import create_dir
+from utils.file_utils import create_dir
 
 
 def parse_arguments() -> Tuple[str, str]:

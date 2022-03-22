@@ -3,9 +3,9 @@ import os.path as osp
 
 from pytorch_lightning import Trainer
 
-from src.datamodules.flow_datamodule import TripletFlowDataModule
-from src.models.triplet_i3d import TripletI3DModel
-from src.utils.file_utils import create_dir, save_pickle
+from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
+from flow_encoder.src.models.triplet_i3d import TripletI3DModel
+from utils.file_utils import create_dir, save_pickle
 
 
 def extract_features(config: DictConfig):

@@ -10,7 +10,7 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from src.utils.file_utils import create_dir
+from utils.file_utils import create_dir
 
 
 def split_clip(clip_path: str, frame_dir: str):

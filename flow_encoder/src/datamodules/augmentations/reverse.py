@@ -4,7 +4,7 @@ import subprocess
 
 import torch
 
-from src.utils.file_utils import create_dir
+from utils.file_utils import create_dir
 
 
 def reverse_clip(input_dir: str, save_dir: str):

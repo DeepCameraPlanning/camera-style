@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from src.utils.file_utils import load_frames, load_pickle, write_clip
+from utils.file_utils import create_dir, load_frames, load_pickle, write_clip
 
 
 def parse_arguments():
@@ -15,17 +15,21 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "root_dir",
+        "detection_dir",
         type=str,
-        help="Path to the data root directory",
+        help="Path to the bbox directory",
     )
     parser.add_argument(
-        "--video-ids",
-        "-v",
+        "video_dir",
         type=str,
-        default=None,
-        help="Name of an optional list of video ids",
+        help="Path to the frame directory",
     )
+    parser.add_argument(
+        "save_dir",
+        type=str,
+        help="Path to the saving directory",
+    )
+
     args = parser.parse_args()
 
     return args
@@ -82,23 +86,26 @@ COLORS = np.array(
 
 if __name__ == "__main__":
     args = parse_arguments()
-    root_dir = args.root_dir
-    video_ids_filename = args.video_ids
+    detection_dir = args.detection_dir
+    video_dir = args.video_dir
+    save_dir = args.save_dir
 
-    if video_ids_filename is None:
-        video_ids = os.listdir(osp.join(root_dir, "videos"))
-    else:
-        video_ids = load_pickle(video_ids_filename)
+    create_dir(save_dir)
+    video_ids = os.listdir(video_dir)
 
     for video_id in tqdm(video_ids):
-        video_path = osp.join(root_dir, "videos", video_id)
+        video_path = osp.join(video_dir, video_id)
         frames = load_frames(video_path)
 
         tracked_detections_path = osp.join(
-            root_dir, "tracked_detections", video_id[:-3] + "pk"
+            detection_dir, "tracked_detections", video_id[:-3] + "pk"
         )
-        bbox_tracks = load_pickle(tracked_detections_path)
+        _, bbox_tracks = load_pickle(tracked_detections_path)
 
+        if video_id == "0_CxQ4aL5IXZw.mkv":
+            import ipdb
+
+            ipdb.set_trace()
         annotated_frames = []
         all_prev_x = [None for _ in range(len(bbox_tracks))]
         all_prev_y = [None for _ in range(len(bbox_tracks))]
@@ -127,5 +134,5 @@ if __name__ == "__main__":
 
             annotated_frames.append(frame)
 
-        annotated_bbox_path = osp.join(root_dir, "annotated_bboxes", video_id)
+        annotated_bbox_path = osp.join(save_dir, video_id)
         write_clip(annotated_frames, annotated_bbox_path)

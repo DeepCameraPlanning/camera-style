@@ -2,7 +2,7 @@ import ipdb
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from src.datamodules.flow_datamodule import TripletFlowDataModule
+from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
 
 
 def debug(config: DictConfig):

@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
 
-from src.utils.file_utils import create_dir, save_pth
-from src.utils.flow_utils import FlowUtils
+from utils.file_utils import create_dir, save_pth
+from utils.flow_utils import FlowUtils
 
 
 def parse_arguments() -> Tuple[str, str]:

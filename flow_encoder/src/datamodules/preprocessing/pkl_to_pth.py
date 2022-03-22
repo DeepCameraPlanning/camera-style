@@ -9,7 +9,7 @@ from typing import Tuple
 from tqdm import tqdm
 import torch
 
-from src.utils.file_utils import create_dir, load_pickle, save_pth
+from utils.file_utils import create_dir, load_pickle, save_pth
 
 
 def parse_arguments() -> Tuple[str, str]:

@@ -4,8 +4,8 @@ import os.path as osp
 
 from tqdm import tqdm
 
-from features.core.people_detector import PeopleDetector
-from src.utils.file_utils import save_pickle, load_frames, load_pickle
+from raw_features.core.people_detector import PeopleDetector
+from utils.file_utils import create_dir, save_pickle, load_frames, load_pickle
 
 
 def parse_arguments():
@@ -13,9 +13,14 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "root_dir",
+        "video_dir",
         type=str,
         help="Path to the data root directory",
+    )
+    parser.add_argument(
+        "save_dir",
+        type=str,
+        help="Path to the saving directory",
     )
     parser.add_argument(
         "--video-ids",
@@ -31,30 +36,33 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    root_dir = args.root_dir
+    video_dir = args.video_dir
     video_ids_filename = args.video_ids
 
+    save_dir = args.save_dir
+    create_dir(save_dir)
+    raw_detections_dir = osp.join(save_dir, "raw_detections")
+    create_dir(raw_detections_dir)
+    tracked_detections_dir = osp.join(save_dir, "tracked_detections")
+    create_dir(tracked_detections_dir)
+
     if video_ids_filename is None:
-        video_ids = os.listdir(osp.join(root_dir, "videos"))
+        video_ids = os.listdir(video_dir)
     else:
         video_ids = load_pickle(video_ids_filename)
 
     people_detector = PeopleDetector(batch_size=32)
     for video_id in tqdm(video_ids):
-        video_path = osp.join(root_dir, "videos", video_id)
+        video_path = osp.join(video_dir, video_id)
+        save_name = video_id[:-3] + "pk"
         frames = load_frames(video_path)
+        height, width, _ = frames[0].shape
 
-        raw_detections_path = osp.join(
-            "./data", "raw_detections", video_id[:-3] + "pk"
-        )
-        if not osp.exists(raw_detections_path):
-            raw_detections = people_detector.detect_people(frames)
-            save_pickle(raw_detections, raw_detections_path)
+        raw_detections_path = osp.join(raw_detections_dir, save_name)
+        raw_detections = people_detector.detect_people(frames)
+        save_pickle([(height, width), raw_detections], raw_detections_path)
 
-        tracked_detections_path = osp.join(
-            "./data", "tracked_detections", video_id[:-3] + "pk"
-        )
-        if not osp.exists(tracked_detections_path):
-            bboxes, masks, scores = raw_detections
-            bbox_tracks = people_detector.get_bboxtracks(bboxes, scores)
-            save_pickle(bbox_tracks, tracked_detections_path)
+        tracked_detections_path = osp.join(tracked_detections_dir, save_name)
+        bboxes, masks, scores = raw_detections
+        bbox_tracks = people_detector.get_bboxtracks(bboxes, scores)
+        save_pickle(((height, width), bbox_tracks), tracked_detections_path)

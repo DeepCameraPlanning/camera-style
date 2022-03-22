@@ -5,8 +5,8 @@ import os.path as osp
 import cv2
 from tqdm import tqdm
 
-from features.core.motion_detector import FlowEstimator
-from src.utils.file_utils import (
+from raw_features.core.motion_detector import FlowEstimator
+from utils.file_utils import (
     create_dir,
     save_pickle,
     load_pickle,

@@ -3,8 +3,10 @@ import os.path as osp
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
-from src.datamodules.datasets.triplet_dataset import TripletFlowDataset
-from src.utils.file_utils import load_csv
+from flow_encoder.src.datamodules.datasets.triplet_dataset import (
+    TripletFlowDataset,
+)
+from utils.file_utils import load_csv
 
 
 class TripletFlowDataModule(LightningDataModule):

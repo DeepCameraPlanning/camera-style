@@ -5,8 +5,14 @@ from typing import Tuple
 
 from tqdm import tqdm
 
-from src.datamodules.augmentations.reverse import reverse_clip, reverse_flow
-from src.datamodules.augmentations.speedup import speedup_clip, speedup_flow
+from flow_encoder.src.datamodules.augmentations.reverse import (
+    reverse_clip,
+    reverse_flow,
+)
+from flow_encoder.src.datamodules.augmentations.speedup import (
+    speedup_clip,
+    speedup_flow,
+)
 
 
 def parse_arguments() -> Tuple[str]:
