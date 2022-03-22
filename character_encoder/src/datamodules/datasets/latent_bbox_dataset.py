@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import Dataset
 
 from utils.file_utils import load_pth, load_pickle
+from utils.feature_utils import compute_bbox_area
 
 
 class LatentBboxDataset(Dataset):
@@ -72,6 +73,16 @@ class LatentBboxDataset(Dataset):
             character_mask[y1:y2, x1:x2] = flow[y1:y2, x1:x2]
 
         return character_mask
+
+    @staticmethod
+    def _get_largest_bbox(bboxes: List[np.array]) -> torch.Tensor:
+        """Select the largest bbox or if empty, return a null bbox."""
+        if len(bboxes) == 0:
+            return torch.zeros(4, dtype=torch.float64)
+
+        bbox_areas = compute_bbox_area(np.array(bboxes))
+        largest_bbox = torch.from_numpy(bboxes[np.argmax(bbox_areas)])
+        return largest_bbox
 
     @staticmethod
     def _get_paths(root_dir: str) -> List[str]:
@@ -186,7 +197,7 @@ class LatentBboxDataset(Dataset):
         # Load target data
         target_sample_infos = self._sample_infos[(clip_name, sample_index + 1)]
         target_keyframe = target_sample_infos["keyframe_index"]
-        target_bboxes = target_sample_infos["bboxes"]
+        target_bboxes = self._get_largest_bbox(target_sample_infos["bboxes"])
 
         sample_data = {
             "clip_name": clip_name,

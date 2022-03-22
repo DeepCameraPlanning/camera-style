@@ -13,10 +13,9 @@ class LatentBboxDataModule(LightningDataModule):
     """Initialize train, val and test base data loader.
 
     :param split_dir: path to the directory with train/val/test splits.
-    :param unity_dir: path to the directory with Unity flows.
-    :param prcpt_dir: path to the directory with precomputed flows.
-    :param n_frames: number of frames in a sample (fixed by the model).
-    :param stride: number of frames between 2 consecutive samples.
+    :param bbox_dir: directory containing pre-extracted detections.
+    :param feature_dir: directory containing pre-extracted flow features.
+    :param flow_dir: directory containing pre-compute flow frames.
     :param batch_size: size of batches.
     :param num_workers: number of workers.
     """
@@ -24,6 +23,9 @@ class LatentBboxDataModule(LightningDataModule):
     def __init__(
         self,
         split_dir: str,
+        bbox_dir: str,
+        feature_dir: str,
+        flow_dir: str,
         batch_size: int,
         num_workers: int,
     ):
@@ -35,6 +37,10 @@ class LatentBboxDataModule(LightningDataModule):
         self._val_clip_dirnames = load_csv(val_split_path)[0].tolist()
         test_split_path = osp.join(split_dir, "val.csv")
         self._test_clip_dirnames = load_csv(test_split_path)[0].tolist()
+
+        self._bbox_dir = bbox_dir
+        self._feature_dir = feature_dir
+        self._flow_dir = flow_dir
 
         self.batch_size = batch_size
         self.num_workers = num_workers
