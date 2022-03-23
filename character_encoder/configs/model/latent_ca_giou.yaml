@@ -1,0 +1,19 @@
+module_name: latent_cross_attention
+
+checkpoint_path: ${checkpoint_dirpath}/last.ckpt
+optimizer: adam
+loss: giou
+learning_rate: 1e-5
+weight_decay: 1e-4
+momentum: 0.9
+
+num_freq_bands: 6
+max_freq: 10.0
+depth: 2
+cross_heads: 1
+cross_dim_head: 16
+attn_dropout: 0.0
+ff_dropout: 0.0
+weight_tie_layers: False
+fourier_encode_data: true
+final_classifier_head: true
