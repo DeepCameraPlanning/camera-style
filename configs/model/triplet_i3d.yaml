@@ -1,5 +1,6 @@
 module_name: triplet_i3d
 
+histogram: false
 pretrained_path: ${model_dir}/flow_imagenet.pt
 checkpoint_path: ${checkpoint_dirpath}/last.ckpt
 optimizer: adam
