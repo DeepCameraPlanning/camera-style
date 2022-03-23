@@ -23,10 +23,9 @@ def extract_features(config: DictConfig):
     )
     # Initialize model
     model_params = {
-        "checkpoint_path": config.model.checkpoint_path,
+        "histogram": config.model.histogram,
         "pretrained_path": None,
         "model_config": config.model,
-        "num_classes": config.datamodule.n_classes,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
@@ -35,8 +34,12 @@ def extract_features(config: DictConfig):
     }
     device = "cuda" if config.compnode.num_gpus > 0 else "cpu"
 
-    extractor = TripletI3DModel.load_from_checkpoint(**model_params)
-    extractor = extractor.to(device)
+    if config.model.histogram:
+        extractor = TripletI3DModel(**model_params)
+    else:
+        model_params["checkpoint_path"] = config.model.checkpoint_path
+        extractor = TripletI3DModel.load_from_checkpoint(**model_params)
+        extractor = extractor.to(device)
 
     extracted_features = {}
     for batch in tqdm(data_loader):
