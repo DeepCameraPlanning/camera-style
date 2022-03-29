@@ -3,6 +3,7 @@ import os
 import os.path as osp
 from typing import Any, Dict, List, Tuple
 
+import cv2
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -18,6 +19,7 @@ class LatentBboxDataset(Dataset):
     :param bbox_dir: directory containing pre-extracted detections.
     :param feature_dir: directory containing pre-extracted flow features.
     :param flow_dir: directory containing pre-compute flow frames.
+    :param frame_dir: directory containing raw_frames.
     """
 
     def __init__(
@@ -26,6 +28,7 @@ class LatentBboxDataset(Dataset):
         bbox_dir: str,
         feature_dir: str,
         flow_dir: str,
+        frame_dir: str,
     ):
         super().__init__()
 
@@ -33,6 +36,7 @@ class LatentBboxDataset(Dataset):
         self._bbox_dir = bbox_dir
         self._feature_dir = feature_dir
         self._flow_dir = flow_dir
+        self._frame_dir = frame_dir
 
         self._clip_infos = self._get_clip_infos()
         self._sample_infos, self._sample_keys = self._get_sample_infos()
@@ -48,14 +52,15 @@ class LatentBboxDataset(Dataset):
             for bbox in track:
                 frame_index = bbox[0]
                 bbox_coordinates = bbox[1:]
-                bbox_coordinates[[0, 2]] /= width
-                bbox_coordinates[[1, 3]] /= height
-                bbox_coordinates = np.where(
+                norm_bbox = np.zeros_like(bbox_coordinates)
+                norm_bbox[[0, 2]] = bbox_coordinates[[0, 2]] / width
+                norm_bbox[[1, 3]] = bbox_coordinates[[1, 3]] / height
+                norm_bbox = np.where(
                     bbox_coordinates < 0,
-                    np.zeros_like(bbox_coordinates),
-                    bbox_coordinates,
+                    np.zeros_like(norm_bbox),
+                    norm_bbox,
                 )
-                processed_bboxes[frame_index].append(bbox_coordinates)
+                processed_bboxes[frame_index].append(norm_bbox)
 
         return processed_bboxes
 
@@ -67,9 +72,10 @@ class LatentBboxDataset(Dataset):
         height, width, _ = flow.shape
         character_mask = torch.zeros_like(flow)
         for bbox in bboxes:
-            bbox[[0, 2]] *= width
-            bbox[[1, 3]] *= height
-            x1, y1, x2, y2 = bbox.astype(int)
+            regular_bbox = np.zeros_like(bbox)
+            regular_bbox[[0, 2]] = bbox[[0, 2]] * width
+            regular_bbox[[1, 3]] = bbox[[1, 3]] * height
+            x1, y1, x2, y2 = regular_bbox.astype(int)
             character_mask[y1:y2, x1:x2] = flow[y1:y2, x1:x2]
 
         return character_mask
@@ -99,6 +105,7 @@ class LatentBboxDataset(Dataset):
             - `bbox_path`: path to the precomputed bboxes.
             - `feature_paths`: paths to the precomputed flow features.
             - `flow_paths`: paths to the precomputed flows.
+            - `frame_paths`: paths to the raw_frames.
         """
         clip_infos = []
         for clip_dirname in sorted(self._clip_dirnames):
@@ -110,12 +117,16 @@ class LatentBboxDataset(Dataset):
             flow_dir = osp.join(self._flow_dir, clip_dirname)
             flow_paths = self._get_paths(flow_dir)
 
+            frame_dir = osp.join(self._frame_dir, clip_dirname)
+            frame_paths = self._get_paths(frame_dir)
+
             clip_infos.append(
                 {
                     "clip_name": clip_dirname,
                     "bbox_path": bbox_path,
                     "feature_paths": feature_paths,
                     "flow_paths": flow_paths,
+                    "frame_paths": frame_paths,
                 }
             )
 
@@ -136,12 +147,13 @@ class LatentBboxDataset(Dataset):
             - `bboxes`: path to bboxes of the chunk.
             And return also the list of all (`clip_name`, `sample_index`).
         """
-        sample_infos, sample_keys = {}, []
+        sample_infos = {}
         for clip_info in self._clip_infos:
             clip_name = clip_info["clip_name"]
             bbox_path = clip_info["bbox_path"]
             feature_paths = clip_info["feature_paths"]
             flow_paths = clip_info["flow_paths"]
+            frame_paths = clip_info["frame_paths"]
 
             clip_bboxes = self._load_bboxes(bbox_path)
 
@@ -155,17 +167,25 @@ class LatentBboxDataset(Dataset):
                 ]
                 keyframe_index = start_frame + ((end_frame - start_frame) // 2)
                 sample_flow_path = sorted(flow_paths)[keyframe_index]
+                sample_frame_path = sorted(frame_paths)[keyframe_index]
                 sample_bboxes = clip_bboxes[keyframe_index]
+                if len(sample_bboxes) > 0:
+                    # Store sample information
+                    sample_infos[(clip_name, sample_index)] = {
+                        "keyframe_index": keyframe_index,
+                        "bboxes": sample_bboxes,
+                        "feature_path": sample_feature_path,
+                        "flow_path": sample_flow_path,
+                        "frame_path": sample_frame_path,
+                    }
 
-                # Store sample information
-                sample_infos[(clip_name, sample_index)] = {
-                    "keyframe_index": keyframe_index,
-                    "feature_path": sample_feature_path,
-                    "flow_path": sample_flow_path,
-                    "bboxes": sample_bboxes,
-                }
-                if sample_index < len(feature_paths) - 1:
-                    sample_keys.append((clip_name, sample_index))
+        # Get consecutive samples with bboxes
+        sample_keys = []
+        for clip_name, sample_index in sample_infos.keys():
+            if (clip_name, sample_index + 1) in sample_infos.keys():
+                sample_keys.append(
+                    [(clip_name, sample_index), (clip_name, sample_index + 1)]
+                )
 
         return sample_infos, sample_keys
 
@@ -182,29 +202,38 @@ class LatentBboxDataset(Dataset):
             - `input_character_mask`: char mask of the input chunk keyframe.
             - `target_bbox`: bbox coordinates of the target chunk keyframe.
         """
-        clip_name, sample_index = self._sample_keys[index]
+        input_key, target_key = self._sample_keys[index]
+        input_clip_name, sample_index = input_key
 
         # Load input data
-        input_sample_infos = self._sample_infos[(clip_name, sample_index)]
+        input_sample_infos = self._sample_infos[input_key]
         input_keyframe = input_sample_infos["keyframe_index"]
         input_feature = load_pickle(input_sample_infos["feature_path"])
         input_flow = load_pth(input_sample_infos["flow_path"])
         input_bboxes = input_sample_infos["bboxes"]
         input_character_mask = self._load_character_mask(
-            input_flow, input_bboxes
+            input_flow, [self._get_largest_bbox(input_bboxes)]
+        )
+        input_frame = cv2.resize(
+            cv2.imread(input_sample_infos["frame_path"]), (224, 224)
         )
 
         # Load target data
-        target_sample_infos = self._sample_infos[(clip_name, sample_index + 1)]
+        target_sample_infos = self._sample_infos[target_key]
         target_keyframe = target_sample_infos["keyframe_index"]
         target_bboxes = self._get_largest_bbox(target_sample_infos["bboxes"])
+        target_frame = cv2.resize(
+            cv2.imread(target_sample_infos["frame_path"]), (224, 224)
+        )
 
         sample_data = {
-            "clip_name": clip_name,
+            "clip_name": input_clip_name,
             "keyframe_indices": (input_keyframe, target_keyframe),
             "input_feature": input_feature,
             "input_character_mask": input_character_mask,
             "target_bbox": target_bboxes,
+            "input_frame": input_frame,
+            "target_frame": target_frame,
         }
 
         return sample_data

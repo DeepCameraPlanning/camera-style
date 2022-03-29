@@ -17,6 +17,7 @@ def train(config: DictConfig):
         bbox_dir=config.datamodule.bbox_dir,
         feature_dir=config.datamodule.feature_dir,
         flow_dir=config.datamodule.flow_dir,
+        frame_dir=config.datamodule.frame_dir,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )
@@ -45,6 +46,7 @@ def train(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
+        "check_dir": config.datamodule.check_dir,
     }
     model = LatentCharacterModel(**model_params)
 
@@ -56,7 +58,7 @@ def train(config: DictConfig):
         callbacks=[lr_monitor, checkpoint],
         logger=wandb_logger,
         log_every_n_steps=5,
-        precision=16,
+        # precision=16,
     )
 
     # Launch model training

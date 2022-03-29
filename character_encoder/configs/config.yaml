@@ -1,12 +1,12 @@
 defaults:
   - _self_
   - compnode: light_1n_1g_28b.yaml
-  - model: latent_ca_giou.yaml
+  - model: latent_ca_l1.yaml
   - datamodule: latent_bbox.yaml
 
 hydra:
   run:
-    dir: ${hydra:runtime.cwd}/character_encoder/outputs
+    dir: ${hydra:runtime.cwd}/character_encoder/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 num_epochs: 50
 
@@ -32,7 +32,7 @@ log_offline: false
 # Metric to monitor to save models
 checkpoint_metric: "val/loss"
 # Directory to save model checkpoints
-checkpoint_dirpath: "${root}/character_encoder/checkpoints"
+checkpoint_dirpath: ${root}/character_encoder/checkpoints
 
 # Seed for random number generators
 seed: 1

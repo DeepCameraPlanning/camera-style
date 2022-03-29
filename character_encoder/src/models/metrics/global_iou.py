@@ -43,7 +43,6 @@ class GIOULoss(nn.Module):
         area_union = pred_area + target_area - area_intersect + 1e-7
         ious = area_intersect / area_union
         gious = ious - (area_enclosing - area_union) / area_enclosing
-
         loss = 1 - gious
 
         if weights is None:

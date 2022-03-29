@@ -3,3 +3,5 @@ split_dir: ${data_dir}/splits
 bbox_dir: ${data_dir}/detections/tracked_detections
 feature_dir: ${data_dir}/features/flow_feature_pk
 flow_dir: ${data_dir}/flows/flow_raft_unit_pth
+frame_dir: ${data_dir}/raw_cm/raw_frames/
+check_dir: ${hydra:run.dir}/check
