@@ -5,7 +5,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
-from flow_encoder.src.models.triplet_i3d import TripletI3DModel
+from flow_encoder.src.models.flow_encoder import I3DEncoderModel
+from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 
 
 def train(config: DictConfig):
@@ -44,8 +45,15 @@ def train(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
+        "histogram": False,
     }
-    model = TripletI3DModel(**model_params)
+    if config.model.module_name == "encoder_i3d":
+        model = I3DEncoderModel(**model_params)
+    elif config.model.module_name == "autoencoder_i3d":
+        model_params["triplet_coef"] = config.model.triplet_coef
+        model_params["reconstruction_coef"] = config.model.reconstruction_coef
+        model_params["check_dir"] = config.datamodule.check_dir
+        model = I3DAutoencoderModel(**model_params)
 
     trainer = Trainer(
         gpus=config.compnode.num_gpus,
@@ -55,7 +63,7 @@ def train(config: DictConfig):
         callbacks=[lr_monitor, checkpoint],
         logger=wandb_logger,
         log_every_n_steps=5,
-        precision=16,
+        # precision=16,
     )
 
     # Launch model training

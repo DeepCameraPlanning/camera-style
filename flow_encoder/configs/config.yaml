@@ -1,12 +1,12 @@
 defaults:
   - _self_
   - compnode: light_1n_1g_28b.yaml
-  - model: triplet_i3d.yaml
+  - model: encoder_i3d.yaml
   - datamodule: maxnorm_flow.yaml
 
 hydra:
   run:
-    dir: ${hydra:runtime.cwd}/flow_encoder/outputs
+    dir: ${hydra:runtime.cwd}/flow_encoder/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 num_epochs: 50
 

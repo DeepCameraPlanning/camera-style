@@ -173,11 +173,11 @@ if __name__ == "__main__":
             ScaleFlow(unit_module, max_module),
         ]
     )
-    for clip_dirname in os.listdir(flow_dir):
+    for clip_dirname in tqdm(os.listdir(flow_dir)):
         clip_dir = osp.join(flow_dir, clip_dirname)
         save_clip_dir = osp.join(save_dir, clip_dirname)
         create_dir(save_clip_dir)
-        for flow_filename in tqdm(sorted(os.listdir(clip_dir))):
+        for flow_filename in sorted(os.listdir(clip_dir)):
             flow_path = osp.join(clip_dir, flow_filename)
             save_flow_path = osp.join(save_clip_dir, flow_filename)
             flow = load_pth(flow_path)

@@ -4,11 +4,11 @@ import torch
 from torch.nn import TripletMarginLoss
 from pytorch_lightning import LightningModule
 
-from flow_encoder.src.models.modules.i3d import make_flow_i3d
+from flow_encoder.src.models.modules.i3d import make_flow_encoder
 from flow_encoder.src.models.modules.flow_histogram import make_flow_histogram
 
 
-class TripletI3DModel(LightningModule):
+class I3DEncoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
@@ -31,7 +31,7 @@ class TripletI3DModel(LightningModule):
         if histogram:
             self.model = make_flow_histogram(grid_dims=(6, 10), n_angle_bins=8)
         else:
-            self.model = make_flow_i3d(pretrained_path)
+            self.model = make_flow_encoder(pretrained_path)
 
     def _shared_log_step(self, mode: str, loss: torch.Tensor):
         """Log metrics at each epoch and each step for the training."""
@@ -58,6 +58,9 @@ class TripletI3DModel(LightningModule):
         positive_flows = batch["positive_flows"].float()
         negative_flows = batch["negative_flows"].float()
 
+        import ipdb
+
+        ipdb.set_trace()
         anchor_out = self.model.extract_features(anchor_flows)
         positive_out = self.model.extract_features(positive_flows)
         negative_out = self.model.extract_features(negative_flows)

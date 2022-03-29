@@ -1,5 +1,7 @@
 """This code is adapted from: https://github.com/piergiaj/pytorch-i3d."""
 
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -59,6 +61,78 @@ class Unit3D(nn.Module):
         self.padding = padding
 
         self.conv3d = nn.Conv3d(
+            in_channels=in_channels,
+            out_channels=self._output_channels,
+            kernel_size=self._kernel_shape,
+            stride=self._stride,
+            padding=0,
+            bias=self._use_bias,
+        )
+
+        if self._use_batch_norm:
+            self.bn = nn.BatchNorm3d(
+                self._output_channels, eps=0.001, momentum=0.01
+            )
+
+    def compute_pad(self, dim, s):
+        if s % self._stride[dim] == 0:
+            return max(self._kernel_shape[dim] - self._stride[dim], 0)
+        else:
+            return max(self._kernel_shape[dim] - (s % self._stride[dim]), 0)
+
+    def forward(self, x):
+        # compute 'same' padding
+        (batch, channel, t, h, w) = x.size()
+
+        pad_t = self.compute_pad(0, t)
+        pad_h = self.compute_pad(1, h)
+        pad_w = self.compute_pad(2, w)
+
+        pad_t_f = pad_t // 2
+        pad_t_b = pad_t - pad_t_f
+        pad_h_f = pad_h // 2
+        pad_h_b = pad_h - pad_h_f
+        pad_w_f = pad_w // 2
+        pad_w_b = pad_w - pad_w_f
+
+        pad = (pad_w_f, pad_w_b, pad_h_f, pad_h_b, pad_t_f, pad_t_b)
+        x = F.pad(x, pad)
+
+        x = self.conv3d(x)
+        if self._use_batch_norm:
+            x = self.bn(x)
+        if self._activation_fn is not None:
+            x = self._activation_fn(x)
+        return x
+
+
+class DecoderUnit3D(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        output_channels,
+        kernel_shape=(1, 1, 1),
+        stride=(1, 1, 1),
+        padding=0,
+        activation_fn=F.relu,
+        use_batch_norm=True,
+        use_bias=False,
+        name="unit_3d",
+    ):
+
+        """Initializes Unit3D module."""
+        super(Unit3D, self).__init__()
+
+        self._output_channels = output_channels
+        self._kernel_shape = kernel_shape
+        self._stride = stride
+        self._use_batch_norm = use_batch_norm
+        self._activation_fn = activation_fn
+        self._use_bias = use_bias
+        self.name = name
+        self.padding = padding
+
+        self.conv3d = nn.ConvTranspose3d(
             in_channels=in_channels,
             out_channels=self._output_channels,
             kernel_size=self._kernel_shape,
@@ -416,24 +490,102 @@ class InceptionI3d(nn.Module):
         # logits is batch X time X classes, which is what we want to work with
         return logits
 
-    def extract_features(self, x):
+    def extract_features(self, x, avg_out=True):
         for end_point in self.VALID_ENDPOINTS:
             if end_point in self.end_points:
                 x = self._modules[end_point](x)
 
-        return self.avg_pool(x)
+        if avg_out:
+            x = self.avg_pool(x)
+
+        return x
 
 
-def make_flow_i3d(pretrained_path: str) -> nn.Module:
+class DecoderConv3D(nn.Module):
+    """3D CNN flow decoder."""
+
+    def __init__(self, in_channels: int, latent_dim: int):
+        super(DecoderConv3D, self).__init__()
+
+        ndf = latent_dim // 8
+        # dconv0 out: 512, 4, 14, 14
+        self.deconv0 = nn.Sequential(
+            nn.ConvTranspose3d((ndf * 8), ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm3d(ndf * 4),
+            nn.ReLU(inplace=True),
+        )
+        # dconv1 out: 256, 8, 28, 28
+        self.deconv1 = nn.Sequential(
+            nn.ConvTranspose3d(ndf * 4, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm3d(ndf * 2),
+            nn.ReLU(inplace=True),
+        )
+        # dconv2 out: 128, 16, 56, 56
+        self.deconv2 = nn.Sequential(
+            nn.ConvTranspose3d(ndf * 2, ndf, 4, 2, 1, bias=False),
+            nn.BatchNorm3d(ndf),
+            nn.ReLU(inplace=True),
+        )
+        # dconv3 out: 2, 16, 224, 224
+        self.deconv3 = nn.Sequential(
+            nn.ConvTranspose3d(
+                ndf, in_channels, (3, 6, 6), (1, 4, 4), 1, bias=False
+            ),
+            # nn.Sigmoid(),
+            nn.Tanh(),
+        )
+
+    def forward(self, x) -> torch.Tensor:
+        x = self.deconv0(x)
+        x = self.deconv1(x)
+        x = self.deconv2(x)
+        x = self.deconv3(x)
+        return x
+
+
+class AutoencoderI3D(nn.Module):
+    """Flow autoencoder with an I3D encoder."""
+
+    def __init__(self, in_channels: int, latent_dim: int):
+        super(AutoencoderI3D, self).__init__()
+        self.encoder = InceptionI3d(in_channels=in_channels)
+        self.decoder = DecoderConv3D(in_channels, latent_dim)
+        self.avg_pool = nn.AvgPool3d(kernel_size=[2, 7, 7], stride=(1, 1, 1))
+
+    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
+        latent_features = self.encoder.extract_features(x, avg_out=False)
+        flatten_features = self.avg_pool(latent_features)
+        out = self.decoder(latent_features)
+
+        return flatten_features, out
+
+
+def make_flow_encoder(pretrained_path: str) -> nn.Module:
     """Load a standard flow I3D (2 channels) architecture.
 
     :param pretrained_path: if provided load the model stored at this location.
     :return: configured flow I3D.
     """
-    model = InceptionI3d(num_classes=400, in_channels=2)
+    model = InceptionI3d(in_channels=2)
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
         model.load_state_dict(pretrained_params)
+
+    return model
+
+
+def make_flow_autoencoder(pretrained_path: str) -> nn.Module:
+    """Load a flow (2 channels) autoencoder (I3D encoder) architecture.
+
+    :param pretrained_path: if provided load the model stored at this location.
+    :return: configured flow autoencoder.
+    """
+    model = AutoencoderI3D(in_channels=2, latent_dim=1024)
+
+    # TODO
+    # if pretrained_path:
+    #     pretrained_params = torch.load(pretrained_path)
+    #     model.load_state_dict(pretrained_params)
 
     return model
