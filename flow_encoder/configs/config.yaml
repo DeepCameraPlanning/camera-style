@@ -2,13 +2,9 @@ defaults:
   - _self_
   - compnode: light_1n_1g_28b.yaml
   - model: encoder_i3d.yaml
-  - datamodule: maxnorm_flow.yaml
+  - datamodule: unit_flow.yaml
 
-hydra:
-  run:
-    dir: ${hydra:runtime.cwd}/flow_encoder/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-
-num_epochs: 50
+num_epochs: 51
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
@@ -32,7 +28,7 @@ log_offline: false
 # Metric to monitor to save models
 checkpoint_metric: "val/loss"
 # Directory to save model checkpoints
-checkpoint_dirpath: "${root}/flow_encoder/checkpoints"
+checkpoint_dirpath: ${root}/flow_encoder/checkpoints
 
 # Seed for random number generators
 seed: 1
@@ -40,3 +36,7 @@ seed: 1
 print_config: True
 # Disable (or not) python warnings
 ignore_warnings: True
+
+hydra:
+  run:
+    dir: ${hydra:runtime.cwd}/flow_encoder/outputs/${now:%Y-%m-%d}/${xp_name}-${now:%H-%M-%S}

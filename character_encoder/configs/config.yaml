@@ -8,7 +8,7 @@ hydra:
   run:
     dir: ${hydra:runtime.cwd}/character_encoder/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-num_epochs: 50
+num_epochs: 51
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
