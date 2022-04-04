@@ -6,3 +6,4 @@ check_dir: ${hydra:run.dir}/check
 masked: false
 n_temporal_mask: 1
 spatial_mask_size: 20
+flow_type: "positive"

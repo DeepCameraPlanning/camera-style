@@ -58,9 +58,6 @@ class I3DEncoderModel(LightningModule):
         positive_flows = batch["positive_flows"].float()
         negative_flows = batch["negative_flows"].float()
 
-        import ipdb
-
-        ipdb.set_trace()
         anchor_out = self.model.extract_features(anchor_flows)
         positive_out = self.model.extract_features(positive_flows)
         negative_out = self.model.extract_features(negative_flows)

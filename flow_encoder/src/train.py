@@ -7,6 +7,9 @@ from pytorch_lightning.loggers import WandbLogger
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
 from flow_encoder.src.models.flow_encoder import I3DEncoderModel
 from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
+from flow_encoder.src.models.flow_contrastive_autoencoder import (
+    I3DContrastiveAutoencoderModel,
+)
 
 
 def train(config: DictConfig):
@@ -47,12 +50,17 @@ def train(config: DictConfig):
         "batch_size": config.compnode.batch_size,
         "histogram": False,
     }
+
     if config.model.module_name == "encoder_i3d":
         model = I3DEncoderModel(**model_params)
-    elif config.model.module_name == "autoencoder_i3d":
+    elif config.model.module_name == "constrative_autoencoder_i3d":
         model_params["triplet_coef"] = config.model.triplet_coef
         model_params["reconstruction_coef"] = config.model.reconstruction_coef
         model_params["check_dir"] = config.datamodule.check_dir
+        model = I3DContrastiveAutoencoderModel(**model_params)
+    elif config.model.module_name == "autoencoder_i3d":
+        model_params["check_dir"] = config.datamodule.check_dir
+        model_params["flow_type"] = config.datamodule.flow_type
         model = I3DAutoencoderModel(**model_params)
 
     trainer = Trainer(

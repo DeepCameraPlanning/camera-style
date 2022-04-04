@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import torch
-from torch.nn import MSELoss
+from torch.nn import MSELoss, TripletMarginLoss, L1Loss
 from pytorch_lightning import LightningModule
 
 from flow_encoder.src.models.modules.i3d import make_flow_autoencoder
@@ -11,13 +11,14 @@ from utils.flow_utils import FlowUtils
 from utils.file_utils import create_dir
 
 
-class I3DAutoencoderModel(LightningModule):
+class I3DContrastiveAutoencoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
-        flow_type: str,
         check_dir: str,
         histogram: bool,
+        triplet_coef: float,
+        reconstruction_coef: float,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -31,10 +32,12 @@ class I3DAutoencoderModel(LightningModule):
         self._weight_decay = weight_decay
         self._momentum = momentum
         self._batch_size = batch_size
-        self._flow_type = flow_type
 
-        self.loss = MSELoss()
-        # self.loss = L1Loss()
+        self._triplet_coef = triplet_coef
+        self.triplet_loss = TripletMarginLoss()
+        self._reconstruction_coef = reconstruction_coef
+        self.reconstruction_loss = MSELoss()
+        # self.reconstruction_loss = L1Loss()
 
         self.model = make_flow_autoencoder(pretrained_path)
 
@@ -44,13 +47,35 @@ class I3DAutoencoderModel(LightningModule):
     def _shared_log_step(
         self,
         mode: str,
-        loss: torch.Tensor,
+        total_loss: torch.Tensor,
+        triplet_loss: torch.Tensor,
+        reconstruction_loss: torch.Tensor,
     ):
         """Log metrics at each epoch and each step for the training."""
         on_step = True if mode == "train" else False
         self.log(
             f"{mode}/loss",
-            loss,
+            total_loss,
+            on_step=on_step,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+            sync_dist=True,
+            batch_size=self._batch_size,
+        )
+        self.log(
+            f"{mode}/triplet_loss",
+            triplet_loss,
+            on_step=on_step,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+            sync_dist=True,
+            batch_size=self._batch_size,
+        )
+        self.log(
+            f"{mode}/reconstruction_loss",
+            reconstruction_loss,
             on_step=on_step,
             on_epoch=True,
             prog_bar=False,
@@ -93,15 +118,34 @@ class I3DAutoencoderModel(LightningModule):
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """ """
-        input_flows = batch[f"{self._flow_type}_flows"].float()
-        _, out_flows = self.model(input_flows)
+        """
+        Extract features from anchor, positive and negative flows, and compute
+        the triplet loss between these outputs.
+        """
+        anchor_flows = batch["anchor_flows"].float()
+        positive_flows = batch["positive_flows"].float()
+        negative_flows = batch["negative_flows"].float()
 
-        loss = self.loss(out_flows, input_flows)
+        anchor_features, anchor_out = self.model(anchor_flows)
+        positive_features, _ = self.model(positive_flows)
+        negative_features, _ = self.model(negative_flows)
+
+        triplet_value = self._triplet_coef * self.triplet_loss(
+            anchor_features, positive_features, negative_features
+        )
+        reconstruction_value = (
+            self._reconstruction_coef
+            * self.reconstruction_loss(anchor_out, anchor_flows)
+        )
+        total_loss = triplet_value + reconstruction_value
         outputs = {
-            "clipname": batch[f"{self._flow_type}_flows"],
-            "gt_flow": input_flows,
-            "pred_flow": out_flows,
+            "positive_clipname": batch["positive_clipname"],
+            "negative_clipname": batch["negative_clipname"],
+            "anchor_features": anchor_features,
+            "positive_features": positive_features,
+            "negative_features": negative_features,
+            "gt_flow": anchor_flows,
+            "pred_flow": anchor_out,
         }
 
         if (
@@ -109,57 +153,68 @@ class I3DAutoencoderModel(LightningModule):
             and self._check_dir is not None
             and self.current_epoch % 5 == 0
         ):
-            self._log_check(input_flows, out_flows)
+            self._log_check(anchor_flows, anchor_out)
 
-        return loss, outputs
+        return total_loss, triplet_value, reconstruction_value, outputs
 
     def training_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Training loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        loss, _ = out
-        self._shared_log_step("train", loss)
+        total_loss, triplet_value, reconstruction_value, _ = out
+        self._shared_log_step(
+            "train", total_loss, triplet_value, reconstruction_value
+        )
 
-        return {"loss": loss}
+        return {"loss": total_loss}
 
     def validation_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Validation loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        loss, _ = out
-        self._shared_log_step("val", loss)
+        total_loss, triplet_value, reconstruction_value, _ = out
+        self._shared_log_step(
+            "val", total_loss, triplet_value, reconstruction_value
+        )
 
-        return {"loss": loss}
+        return {"loss": total_loss}
 
     def test_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Test loop."""
-        loss, outputs = self._shared_eval_step(batch, batch_idx)
+        out = self._shared_eval_step(batch, batch_idx)
+        total_loss, triplet_value, reconstruction_value, outputs = out
 
         return {
-            "loss": loss,
+            "loss": total_loss,
+            "triplet_value": triplet_value,
+            "reconstruction_value": reconstruction_value,
             "out": outputs,
         }
 
     def test_epoch_end(self, outputs: torch.Tensor) -> Dict[str, Any]:
         """Gather all test outputs."""
-        clipnames = []
-        input_flows, out_flows = [], []
+        positive_clipnames, negative_clipnames = [], []
+        anchor_out, positive_out, negative_out = [], [], []
         for out in outputs:
-            clipnames.extend(out["out"]["clipname"])
-            input_flows.append(out["out"]["input_flows"])
-            out_flows.append(out["out"]["out_flows"])
-
-        input_flows = torch.cat(input_flows)
-        out_flows = torch.cat(out_flows)
+            positive_clipnames.extend(out["out"]["positive_clipname"])
+            negative_clipnames.extend(out["out"]["negative_clipname"])
+            anchor_out.append(out["out"]["anchor_features"])
+            positive_out.append(out["out"]["positive_features"])
+            negative_out.append(out["out"]["negative_features"])
+        anchor = torch.cat(anchor_out)
+        positive = torch.cat(positive_out)
+        negative = torch.cat(negative_out)
 
         self.test_outputs = {
-            "clipnames": clipnames,
-            "input_flows": input_flows.cpu(),
-            "out_flows": out_flows.cpu(),
+            "positive_clipnames": positive_clipnames,
+            "negative_clipnames": negative_clipnames,
+            "anchor": anchor.cpu(),
+            "positive": positive.cpu(),
+            "negative": negative.cpu(),
         }
 
         return outputs

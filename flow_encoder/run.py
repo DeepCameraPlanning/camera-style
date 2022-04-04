@@ -25,6 +25,11 @@ def main(config: DictConfig):
 
         extract_features(config)
 
+    elif config.run_type == "extract_reconstruct":
+        from flow_encoder.src.extract_reconstruct import extract_reconstruct
+
+        extract_reconstruct(config)
+
     elif config.run_type == "debug":
         from flow_encoder.src.debug import debug
 

@@ -106,78 +106,6 @@ class Unit3D(nn.Module):
         return x
 
 
-class DecoderUnit3D(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        output_channels,
-        kernel_shape=(1, 1, 1),
-        stride=(1, 1, 1),
-        padding=0,
-        activation_fn=F.relu,
-        use_batch_norm=True,
-        use_bias=False,
-        name="unit_3d",
-    ):
-
-        """Initializes Unit3D module."""
-        super(Unit3D, self).__init__()
-
-        self._output_channels = output_channels
-        self._kernel_shape = kernel_shape
-        self._stride = stride
-        self._use_batch_norm = use_batch_norm
-        self._activation_fn = activation_fn
-        self._use_bias = use_bias
-        self.name = name
-        self.padding = padding
-
-        self.conv3d = nn.ConvTranspose3d(
-            in_channels=in_channels,
-            out_channels=self._output_channels,
-            kernel_size=self._kernel_shape,
-            stride=self._stride,
-            padding=0,
-            bias=self._use_bias,
-        )
-
-        if self._use_batch_norm:
-            self.bn = nn.BatchNorm3d(
-                self._output_channels, eps=0.001, momentum=0.01
-            )
-
-    def compute_pad(self, dim, s):
-        if s % self._stride[dim] == 0:
-            return max(self._kernel_shape[dim] - self._stride[dim], 0)
-        else:
-            return max(self._kernel_shape[dim] - (s % self._stride[dim]), 0)
-
-    def forward(self, x):
-        # compute 'same' padding
-        (batch, channel, t, h, w) = x.size()
-
-        pad_t = self.compute_pad(0, t)
-        pad_h = self.compute_pad(1, h)
-        pad_w = self.compute_pad(2, w)
-
-        pad_t_f = pad_t // 2
-        pad_t_b = pad_t - pad_t_f
-        pad_h_f = pad_h // 2
-        pad_h_b = pad_h - pad_h_f
-        pad_w_f = pad_w // 2
-        pad_w_b = pad_w - pad_w_f
-
-        pad = (pad_w_f, pad_w_b, pad_h_f, pad_h_b, pad_t_f, pad_t_b)
-        x = F.pad(x, pad)
-
-        x = self.conv3d(x)
-        if self._use_batch_norm:
-            x = self.bn(x)
-        if self._activation_fn is not None:
-            x = self._activation_fn(x)
-        return x
-
-
 class InceptionModule(nn.Module):
     def __init__(self, in_channels, out_channels, name):
         super(InceptionModule, self).__init__()
@@ -558,6 +486,10 @@ class AutoencoderI3D(nn.Module):
         out = self.decoder(latent_features)
 
         return flatten_features, out
+
+    def extract_features(self, x) -> torch.Tensor:
+        latent_features = self.encoder.extract_features(x, avg_out=True)
+        return latent_features
 
 
 def make_flow_encoder(pretrained_path: str) -> nn.Module:

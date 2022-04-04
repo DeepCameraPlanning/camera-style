@@ -4,7 +4,7 @@ import os.path as osp
 from pytorch_lightning import Trainer
 
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
-from flow_encoder.src.models.triplet_i3d import TripletI3DModel
+from flow_encoder.src.models.contrastive_flow_encoder import I3DEncoderModel
 from utils.file_utils import create_dir, save_pickle
 
 
@@ -31,7 +31,7 @@ def extract_features(config: DictConfig):
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
     }
-    model = TripletI3DModel.load_from_checkpoint(**model_params)
+    model = I3DEncoderModel.load_from_checkpoint(**model_params)
 
     trainer = Trainer(
         gpus=config.compnode.num_gpus,
