@@ -53,7 +53,7 @@ def train(config: DictConfig):
 
     if config.model.module_name == "encoder_i3d":
         model = I3DEncoderModel(**model_params)
-    elif config.model.module_name == "constrative_autoencoder_i3d":
+    elif config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["triplet_coef"] = config.model.triplet_coef
         model_params["reconstruction_coef"] = config.model.reconstruction_coef
         model_params["check_dir"] = config.datamodule.check_dir
