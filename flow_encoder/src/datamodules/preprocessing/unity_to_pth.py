@@ -39,7 +39,7 @@ if __name__ == "__main__":
     frame_rootdir, flow_rootdir = parse_arguments()
 
     # Iterate over the different directories containing flow frames
-    for frame_dirname in os.listdir(frame_rootdir):
+    for frame_dirname in tqdm(os.listdir(frame_rootdir)):
         frame_path_pattern = osp.join(frame_rootdir, frame_dirname, "*.png")
         # Load RGB flow frames
         rgb_frames = [
@@ -50,7 +50,7 @@ if __name__ == "__main__":
         # Save flows as pytorch tensors
         flow_dir = osp.join(flow_rootdir, frame_dirname)
         create_dir(flow_dir)
-        for k in tqdm(range(len(flows) - 1)):
+        for k in range(len(flows) - 1):
             flow_filename = osp.join(flow_dir, str(k).zfill(4) + ".pth")
             flow_tensor = torch.from_numpy(flows[k])
             save_pth(flow_tensor, flow_filename)
