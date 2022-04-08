@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - compnode: light_1n_1g_28b.yaml
-  - model: latent_ca_l1.yaml
+  - model: latent_ca.yaml
   - datamodule: latent_bbox.yaml
 
 hydra:
@@ -32,7 +32,8 @@ log_offline: false
 # Metric to monitor to save models
 checkpoint_metric: "val/loss"
 # Directory to save model checkpoints
-checkpoint_dirpath: ${root}/character_encoder/checkpoints
+character_checkpoint_dirpath: ${root}/character_encoder/checkpoints
+flow_checkpoint_dirpath: ${root}/flow_encoder/checkpoints
 
 # Seed for random number generators
 seed: 1
