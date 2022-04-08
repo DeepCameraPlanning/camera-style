@@ -14,7 +14,6 @@ class LatentBboxDataModule(LightningDataModule):
 
     :param split_dir: path to the directory with train/val/test splits.
     :param bbox_dir: directory containing pre-extracted detections.
-    :param feature_dir: directory containing pre-extracted flow features.
     :param flow_dir: directory containing pre-compute flow frames.
     :param frame_dir: directory containing raw_frames.
     :param batch_size: size of batches.
@@ -25,9 +24,10 @@ class LatentBboxDataModule(LightningDataModule):
         self,
         split_dir: str,
         bbox_dir: str,
-        feature_dir: str,
         flow_dir: str,
         frame_dir: str,
+        stride: int,
+        n_frames: int,
         batch_size: int,
         num_workers: int,
     ):
@@ -41,9 +41,11 @@ class LatentBboxDataModule(LightningDataModule):
         self._test_clip_dirnames = load_csv(test_split_path)[0].tolist()
 
         self._bbox_dir = bbox_dir
-        self._feature_dir = feature_dir
         self._flow_dir = flow_dir
         self._frame_dir = frame_dir
+
+        self._stride = stride
+        self._n_frames = n_frames
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -53,9 +55,10 @@ class LatentBboxDataModule(LightningDataModule):
         self.train_set = LatentBboxDataset(
             clip_dirnames=self._train_clip_dirnames,
             bbox_dir=self._bbox_dir,
-            feature_dir=self._feature_dir,
             flow_dir=self._flow_dir,
             frame_dir=self._frame_dir,
+            stride=self._stride,
+            n_frames=self._n_frames,
         )
 
         return DataLoader(
@@ -70,9 +73,10 @@ class LatentBboxDataModule(LightningDataModule):
         self.val_set = LatentBboxDataset(
             clip_dirnames=self._val_clip_dirnames,
             bbox_dir=self._bbox_dir,
-            feature_dir=self._feature_dir,
             flow_dir=self._flow_dir,
             frame_dir=self._frame_dir,
+            stride=self._stride,
+            n_frames=self._n_frames,
         )
 
         return DataLoader(
@@ -86,9 +90,10 @@ class LatentBboxDataModule(LightningDataModule):
         self.test_set = LatentBboxDataset(
             clip_dirnames=self._test_clip_dirnames,
             bbox_dir=self._bbox_dir,
-            feature_dir=self._feature_dir,
             flow_dir=self._flow_dir,
             frame_dir=self._frame_dir,
+            stride=self._stride,
+            n_frames=self._n_frames,
         )
 
         return DataLoader(

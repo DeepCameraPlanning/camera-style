@@ -17,8 +17,7 @@ class LatentBboxDataset(Dataset):
 
     :param clip_dirnames: list of clip directory names to load.
     :param bbox_dir: directory containing pre-extracted detections.
-    :param feature_dir: directory containing pre-extracted flow features.
-    :param flow_dir: directory containing pre-compute flow frames.
+    :param flow_dir: directory containing pre-extracted flows.
     :param frame_dir: directory containing raw_frames.
     """
 
@@ -26,20 +25,31 @@ class LatentBboxDataset(Dataset):
         self,
         clip_dirnames: str,
         bbox_dir: str,
-        feature_dir: str,
         flow_dir: str,
         frame_dir: str,
+        stride: int,
+        n_frames: int,
     ):
         super().__init__()
 
         self._clip_dirnames = clip_dirnames
         self._bbox_dir = bbox_dir
-        self._feature_dir = feature_dir
         self._flow_dir = flow_dir
         self._frame_dir = frame_dir
 
+        self._stride = stride
+        self._n_frames = n_frames
+
         self._clip_infos = self._get_clip_infos()
         self._sample_infos, self._sample_keys = self._get_sample_infos()
+
+    @staticmethod
+    def _load_flows(flow_paths: List[str]) -> torch.Tensor:
+        """Load flows. Output shape: (C, T, W, H)."""
+        flows = torch.stack([load_pth(flow_path) for flow_path in flow_paths])
+        flows = flows.permute([3, 0, 1, 2])
+
+        return flows
 
     @staticmethod
     def _load_bboxes(bbox_path: str) -> Dict[int, List[np.array]]:
@@ -97,22 +107,24 @@ class LatentBboxDataset(Dataset):
         paths = [osp.join(root_dir, name) for name in sorted(filenames)]
         return paths
 
+    @staticmethod
+    def _split_chunks(array: List[Any], stride: int, chunk_size: int):
+        """Yield successive n-sized chunks from `array`."""
+        for i in range(0, len(array), stride):
+            yield array[i : i + chunk_size]
+
     def _get_clip_infos(self) -> List[Dict[str, Any]]:
         """Get feature, bbox and flow paths for each clip.
 
         :return: a list of clips with:
             - `clip_name`: name of the clip.
             - `bbox_path`: path to the precomputed bboxes.
-            - `feature_paths`: paths to the precomputed flow features.
             - `flow_paths`: paths to the precomputed flows.
             - `frame_paths`: paths to the raw_frames.
         """
         clip_infos = []
         for clip_dirname in sorted(self._clip_dirnames):
             bbox_path = osp.join(self._bbox_dir, clip_dirname + ".pk")
-
-            feature_dir = osp.join(self._feature_dir, clip_dirname)
-            feature_paths = self._get_paths(feature_dir)
 
             flow_dir = osp.join(self._flow_dir, clip_dirname)
             flow_paths = self._get_paths(flow_dir)
@@ -124,7 +136,6 @@ class LatentBboxDataset(Dataset):
                 {
                     "clip_name": clip_dirname,
                     "bbox_path": bbox_path,
-                    "feature_paths": feature_paths,
                     "flow_paths": flow_paths,
                     "frame_paths": frame_paths,
                 }
@@ -136,55 +147,54 @@ class LatentBboxDataset(Dataset):
         self,
     ) -> Tuple[Dict[Tuple[str, int], Dict[str, Any]], List[str]]:
         """
-        Generate a list of triplet samples (anchor, positive, negative). Each
-        sample is composed of `n_frames` consecutive flows. Negative samples
-        are randomly selected among samples of another clip.
+        TODO...
 
-        :return: a map from (`clip_name`, `sample_index`) to:
+        :return: a map from (`clip_name`, `chunk_index`) to:
             - `keyframe_index`: index of the keyframe in the chunk.
-            - `feature_path`: path to flow feature of the chunk.
-            - `flow_paths`: path to flow frames of the chunk.
-            - `bboxes`: path to bboxes of the chunk.
-            And return also the list of all (`clip_name`, `sample_index`).
+            - `key_bboxes`:
+            - `key_flow_path`:
+            - `key_frame_path`:
+            - `chunk_flow_paths`:
+            And return also the list of all (`clip_name`, `chunk_index`).
         """
         sample_infos = {}
         for clip_info in self._clip_infos:
             clip_name = clip_info["clip_name"]
             bbox_path = clip_info["bbox_path"]
-            feature_paths = clip_info["feature_paths"]
             flow_paths = clip_info["flow_paths"]
             frame_paths = clip_info["frame_paths"]
 
             clip_bboxes = self._load_bboxes(bbox_path)
 
-            for sample_index, sample_feature_path in enumerate(
-                sorted(feature_paths)
-            ):
+            flow_gen = self._split_chunks(
+                sorted(flow_paths), self._stride, self._n_frames
+            )
+            for chunk_index, chunk_flow_paths in enumerate(flow_gen):
+                if len(chunk_flow_paths) != self._n_frames:
+                    break
+                frame_start = self._stride * chunk_index
+                frame_end = frame_start + self._n_frames - 1
                 # Get chunk path and bboxes for a keyframe
-                chunk_frame_indices = osp.split(sample_feature_path)[1][:-3]
-                start_frame, end_frame = [
-                    int(i) for i in chunk_frame_indices.split("-")
-                ]
-                keyframe_index = start_frame + ((end_frame - start_frame) // 2)
-                sample_flow_path = sorted(flow_paths)[keyframe_index]
-                sample_frame_path = sorted(frame_paths)[keyframe_index]
-                sample_bboxes = clip_bboxes[keyframe_index]
-                if len(sample_bboxes) > 0:
-                    # Store sample information
-                    sample_infos[(clip_name, sample_index)] = {
+                keyframe_index = frame_start + ((frame_end - frame_start) // 2)
+                key_flow_path = sorted(flow_paths)[keyframe_index]
+                key_frame_path = sorted(frame_paths)[keyframe_index]
+                key_bboxes = clip_bboxes[keyframe_index]
+                if len(key_bboxes) > 0:
+                    # Store chunk information
+                    sample_infos[(clip_name, chunk_index)] = {
                         "keyframe_index": keyframe_index,
-                        "bboxes": sample_bboxes,
-                        "feature_path": sample_feature_path,
-                        "flow_path": sample_flow_path,
-                        "frame_path": sample_frame_path,
+                        "key_bboxes": key_bboxes,
+                        "key_flow_path": key_flow_path,
+                        "key_frame_path": key_frame_path,
+                        "chunk_flow_paths": chunk_flow_paths,
                     }
 
         # Get consecutive samples with bboxes
         sample_keys = []
-        for clip_name, sample_index in sample_infos.keys():
-            if (clip_name, sample_index + 1) in sample_infos.keys():
+        for clip_name, chunk_index in sample_infos.keys():
+            if (clip_name, chunk_index + 1) in sample_infos.keys():
                 sample_keys.append(
-                    [(clip_name, sample_index), (clip_name, sample_index + 1)]
+                    [(clip_name, chunk_index), (clip_name, chunk_index + 1)]
                 )
 
         return sample_infos, sample_keys
@@ -203,33 +213,35 @@ class LatentBboxDataset(Dataset):
             - `target_bbox`: bbox coordinates of the target chunk keyframe.
         """
         input_key, target_key = self._sample_keys[index]
-        input_clip_name, sample_index = input_key
+        input_clip_name, chunk_index = input_key
 
         # Load input data
         input_sample_infos = self._sample_infos[input_key]
         input_keyframe = input_sample_infos["keyframe_index"]
-        input_feature = load_pickle(input_sample_infos["feature_path"])
-        input_flow = load_pth(input_sample_infos["flow_path"])
-        input_bboxes = input_sample_infos["bboxes"]
+        input_flow = load_pth(input_sample_infos["key_flow_path"])
+        input_bboxes = input_sample_infos["key_bboxes"]
         input_character_mask = self._load_character_mask(
             input_flow, [self._get_largest_bbox(input_bboxes)]
         )
         input_frame = cv2.resize(
-            cv2.imread(input_sample_infos["frame_path"]), (224, 224)
+            cv2.imread(input_sample_infos["key_frame_path"]), (224, 224)
         )
+        input_flows = self._load_flows(input_sample_infos["chunk_flow_paths"])
 
         # Load target data
         target_sample_infos = self._sample_infos[target_key]
         target_keyframe = target_sample_infos["keyframe_index"]
-        target_bboxes = self._get_largest_bbox(target_sample_infos["bboxes"])
+        target_bboxes = self._get_largest_bbox(
+            target_sample_infos["key_bboxes"]
+        )
         target_frame = cv2.resize(
-            cv2.imread(target_sample_infos["frame_path"]), (224, 224)
+            cv2.imread(target_sample_infos["key_frame_path"]), (224, 224)
         )
 
         sample_data = {
             "clip_name": input_clip_name,
             "keyframe_indices": (input_keyframe, target_keyframe),
-            "input_feature": input_feature,
+            "input_flows": input_flows,
             "input_character_mask": input_character_mask,
             "target_bbox": target_bboxes,
             "input_frame": input_frame,

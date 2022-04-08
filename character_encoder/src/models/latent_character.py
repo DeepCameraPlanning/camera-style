@@ -5,21 +5,27 @@ import numpy as np
 import os.path as osp
 from omegaconf.dictconfig import DictConfig
 import torch
-from torch.nn import SmoothL1Loss
+from torch.nn import SmoothL1Loss, MSELoss
 from torchvision.utils import draw_bounding_boxes
 from pytorch_lightning import LightningModule
 
 from character_encoder.src.models.metrics.global_iou import GIOULoss
 from character_encoder.src.models.metrics.iou import IOULoss
 from character_encoder.src.models.modules.perceiver import make_latent_ca
+from flow_encoder.src.models.flow_contrastive_autoencoder import (
+    I3DContrastiveAutoencoderModel,
+)
 from utils.file_utils import create_dir
+from utils.flow_utils import FlowUtils
 
 
 class LatentCharacterModel(LightningModule):
     def __init__(
         self,
+        autoencoder_ckpt_path: str,
         model_config: DictConfig,
-        loss: str,
+        bbox_coef: float,
+        reconstruction_coef: float,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -34,10 +40,12 @@ class LatentCharacterModel(LightningModule):
         self._weight_decay = weight_decay
         self._momentum = momentum
         self._batch_size = batch_size
-        if loss == "smoothl1":
-            self.criterion = SmoothL1Loss(reduction="mean")
-        elif loss == "giou":
-            self.criterion = GIOULoss()
+
+        self._bbox_coef = bbox_coef
+        self.bbox_loss = SmoothL1Loss(reduction="mean")
+        # self.bbox_loss = GIOULoss()
+        self._reconstruction_coef = reconstruction_coef
+        self.reconstruction_loss = MSELoss(reduction="mean")
 
         self.giou = GIOULoss()
         self.iou = IOULoss()
@@ -45,8 +53,22 @@ class LatentCharacterModel(LightningModule):
 
         self._model_config = model_config
         self.model = make_latent_ca(**model_config)
+        self.autoencoder = I3DContrastiveAutoencoderModel.load_from_checkpoint(
+            autoencoder_ckpt_path,
+            pretrained_path=None,
+            check_dir="",
+            histogram=False,
+            triplet_coef=0,
+            reconstruction_coef=0,
+            optimizer=optimizer,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            momentum=momentum,
+            batch_size=batch_size,
+        ).model
 
         self._check_dir = check_dir
+        self._flow_utils = FlowUtils()
 
     @staticmethod
     def _annotate_bbox(
@@ -79,7 +101,7 @@ class LatentCharacterModel(LightningModule):
         # Save frame
         plt.imsave(save_path, frame.permute(1, 2, 0).numpy())
 
-    def _log_check(
+    def _log_bbox_check(
         self,
         batch: torch.Tensor,
         target_bbox: torch.Tensor,
@@ -93,11 +115,49 @@ class LatentCharacterModel(LightningModule):
         create_dir(current_check_dir)
         for frame_index in range(n_frames):
             check_path = osp.join(
-                current_check_dir, str(frame_index).zfill(3) + ".png"
+                current_check_dir, str(frame_index).zfill(3) + "_bbox.png"
             )
             self._annotate_bbox(
-                batch, frame_index, target_bbox, pred_bbox, check_path
+                batch,
+                frame_index,
+                target_bbox * 224,
+                pred_bbox * 224,
+                check_path,
             )
+
+    def _log_flow_check(
+        self, target_flows: torch.Tensor, pred_flows: torch.Tensor
+    ):
+        """Log pred and gt flow."""
+        n_frames = min(self._batch_size, 10)
+        current_check_dir = osp.join(
+            self._check_dir, "epoch-" + str(self.current_epoch).zfill(4)
+        )
+        create_dir(current_check_dir)
+        for frame_index in range(n_frames):
+            gt_check_path = osp.join(
+                current_check_dir,
+                str(frame_index).zfill(3) + "_flow_target.png",
+            )
+            gt_frame = self._flow_utils.flow_to_frame(
+                target_flows[frame_index, :, 0]
+                .permute(1, 2, 0)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+            plt.imsave(gt_check_path, gt_frame)
+            pred_check_path = osp.join(
+                current_check_dir, str(frame_index).zfill(3) + "_flow_pred.png"
+            )
+            pred_frame = self._flow_utils.flow_to_frame(
+                pred_flows[frame_index, :, 0]
+                .permute(1, 2, 0)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+            plt.imsave(pred_check_path, pred_frame)
 
     def _shared_log_step(
         self,
@@ -106,6 +166,7 @@ class LatentCharacterModel(LightningModule):
         iou: torch.Tensor,
         giou: torch.Tensor,
         l1: torch.Tensor,
+        reconstruction: torch.Tensor,
     ):
         """Log metrics at each epoch and each step for the training."""
         on_step = True if mode == "train" else False
@@ -149,18 +210,45 @@ class LatentCharacterModel(LightningModule):
             sync_dist=True,
             batch_size=self._batch_size,
         )
+        self.log(
+            f"{mode}/reconstruction",
+            reconstruction,
+            on_step=on_step,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+            sync_dist=True,
+            batch_size=self._batch_size,
+        )
 
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Input flow feature and character mask, output bbox coordinates."""
-        input_feature = batch["input_feature"]
+        input_flows = batch["input_flows"]
         input_character_mask = batch["input_character_mask"]
         target_bbox = batch["target_bbox"]
 
-        pred_bbox = self.model(input_feature, input_character_mask) * 224
-        target_bbox = target_bbox.type(pred_bbox.dtype) * 224
-        loss = self.criterion(pred_bbox, target_bbox)
+        input_feature = self.autoencoder.encoder.extract_features(
+            input_flows, avg_out=False
+        )
+        import ipdb
+
+        ipdb.set_trace()
+        out_feature, pred_bbox = self.model(
+            input_feature.view(input_feature.shape[0], -1),
+            input_character_mask,
+        )
+        pred_flows = self.autoencoder.decoder(
+            out_feature.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        )
+        target_bbox = target_bbox.type(pred_bbox.dtype)
+        bbox_loss = self.bbox_loss(pred_bbox, target_bbox)
+        reconstruction_loss = self.reconstruction_loss(input_flows, pred_flows)
+        loss = (
+            self._bbox_coef * bbox_loss
+            + self._reconstruction_coef * reconstruction_loss
+        )
 
         iou = self.iou(pred_bbox, target_bbox)
         giou = self.giou(pred_bbox, target_bbox)
@@ -176,6 +264,7 @@ class LatentCharacterModel(LightningModule):
             "iou": iou,
             "giou": giou,
             "l1": l1,
+            "reconstruction": reconstruction_loss,
         }
 
         if (
@@ -183,7 +272,8 @@ class LatentCharacterModel(LightningModule):
             and self._check_dir is not None
             and self.current_epoch % 5 == 0
         ):
-            self._log_check(batch, target_bbox, pred_bbox)
+            self._log_bbox_check(batch, target_bbox, pred_bbox)
+            self._log_flow_check(input_flows, pred_flows)
 
         return loss, outputs
 
@@ -193,7 +283,12 @@ class LatentCharacterModel(LightningModule):
         """Training loop."""
         loss, outputs = self._shared_eval_step(batch, batch_idx)
         self._shared_log_step(
-            "train", loss, outputs["iou"], outputs["giou"], outputs["l1"]
+            "train",
+            loss,
+            outputs["iou"],
+            outputs["giou"],
+            outputs["l1"],
+            outputs["reconstruction"],
         )
 
         return {"loss": loss}
@@ -204,7 +299,12 @@ class LatentCharacterModel(LightningModule):
         """Validation loop."""
         loss, outputs = self._shared_eval_step(batch, batch_idx)
         self._shared_log_step(
-            "val", loss, outputs["iou"], outputs["giou"], outputs["l1"]
+            "val",
+            loss,
+            outputs["iou"],
+            outputs["giou"],
+            outputs["l1"],
+            outputs["reconstruction"],
         )
 
         return {"loss": loss}

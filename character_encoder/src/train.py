@@ -15,9 +15,10 @@ def train(config: DictConfig):
     data_module = LatentBboxDataModule(
         split_dir=config.datamodule.split_dir,
         bbox_dir=config.datamodule.bbox_dir,
-        feature_dir=config.datamodule.feature_dir,
         flow_dir=config.datamodule.flow_dir,
         frame_dir=config.datamodule.frame_dir,
+        stride=config.datamodule.stride,
+        n_frames=config.datamodule.n_frames,
         batch_size=config.compnode.batch_size,
         num_workers=config.compnode.num_workers,
     )
@@ -32,7 +33,7 @@ def train(config: DictConfig):
         monitor=config.checkpoint_metric,
         mode="min",
         save_last=True,
-        dirpath=config.checkpoint_dirpath,
+        dirpath=config.character_checkpoint_dirpath,
         filename=config.xp_name + "-{epoch}-{val_loss:.2f}",
     )
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
@@ -40,8 +41,10 @@ def train(config: DictConfig):
     # Initialize model
     model_params = {
         "model_config": config.model,
+        "bbox_coef": config.model.bbox_coef,
+        "reconstruction_coef": config.model.reconstruction_coef,
+        "autoencoder_ckpt_path": config.model.autoencoder_ckpt_path,
         "optimizer": config.model.optimizer,
-        "loss": config.model.loss,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
