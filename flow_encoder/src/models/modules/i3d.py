@@ -408,15 +408,9 @@ class InceptionI3d(nn.Module):
     def forward(self, x):
         for end_point in self.VALID_ENDPOINTS:
             if end_point in self.end_points:
-                x = self._modules[end_point](
-                    x
-                )  # use _modules to work with dataparallel
+                x = self._modules[end_point](x)
 
-        x = self.logits(self.dropout(self.avg_pool(x)))
-        if self._spatial_squeeze:
-            logits = x.squeeze(3).squeeze(3)
-        # logits is batch X time X classes, which is what we want to work with
-        return logits
+        return x
 
     def extract_features(self, x, avg_out=True):
         for end_point in self.VALID_ENDPOINTS:
@@ -853,7 +847,7 @@ class SimpleAutoencoderI3D(nn.Module):
 
     def __init__(self, in_channels: int, latent_dim: int):
         super(SimpleAutoencoderI3D, self).__init__()
-        self.encoder = ReducedInceptionI3d(in_channels=in_channels)
+        self.encoder = InceptionI3d(in_channels=in_channels)
         self.decoder = SimpleDecoderConv3D(in_channels, latent_dim)
 
     def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -929,7 +923,7 @@ def make_flow_autoencoder(pretrained_path: str) -> nn.Module:
     :param pretrained_path: if provided load the model stored at this location.
     :return: configured flow autoencoder.
     """
-    model = AutoencoderI3D(in_channels=2, latent_dim=32)
+    model = SimpleAutoencoderI3D(in_channels=2, latent_dim=1024)
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)

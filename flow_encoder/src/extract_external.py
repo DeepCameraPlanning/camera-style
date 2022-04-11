@@ -1,4 +1,5 @@
 import os.path as osp
+
 from omegaconf import DictConfig
 from tqdm import tqdm
 import torch
@@ -53,11 +54,11 @@ def extract_features(config: DictConfig):
 
     if config.model.histogram:
         extractor = I3DEncoderModel(**model_params)
-    elif config.model.module_name == "encoder_i3d":
+    elif config.model.module_name in ["encoder_i3d", "flow_histogram"]:
         model_params["checkpoint_path"] = config.model.checkpoint_path
         extractor = I3DEncoderModel.load_from_checkpoint(**model_params)
         extractor = extractor.to(device)
-    elif config.model.module_name == "autoencoder_i3d":
+    elif config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["triplet_coef"] = config.model.triplet_coef
         model_params["reconstruction_coef"] = config.model.reconstruction_coef
         model_params["check_dir"] = config.datamodule.check_dir
@@ -75,7 +76,7 @@ def extract_features(config: DictConfig):
     for batch in tqdm(data_loader):
         flows = batch["flows"].to(device)
         with torch.no_grad():
-            batch_output = extractor.model.extract_features(flows).squeeze()
+            batch_output = extractor.model.extract_features(flows)
         for clipname, feature in zip(batch["clipname"], batch_output):
             extracted_features[clipname] = feature.to("cpu")
 
