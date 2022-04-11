@@ -42,7 +42,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         self.model = make_flow_autoencoder(pretrained_path)
 
         self._check_dir = check_dir
-        self.flow_utils = FlowUtils()
+        self._flow_utils = FlowUtils()
 
     def _shared_log_step(
         self,
@@ -95,7 +95,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
             gt_check_path = osp.join(
                 current_check_dir, str(frame_index).zfill(3) + "_gt.png"
             )
-            gt_frame = self.flow_utils.flow_to_frame(
+            gt_frame = self._flow_utils.flow_to_frame(
                 gt_flows[frame_index, :, 0]
                 .permute(1, 2, 0)
                 .detach()
@@ -106,7 +106,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
             pred_check_path = osp.join(
                 current_check_dir, str(frame_index).zfill(3) + "_pred.png"
             )
-            pred_frame = self.flow_utils.flow_to_frame(
+            pred_frame = self._flow_utils.flow_to_frame(
                 pred_flows[frame_index, :, 0]
                 .permute(1, 2, 0)
                 .detach()

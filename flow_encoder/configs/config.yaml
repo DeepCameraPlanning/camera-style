@@ -16,8 +16,8 @@ data_dir: ${data_dir}
 test_dir: ${root}/flow_encoder/tests
 # Path to folder with pre-trained models
 model_dir: ${root}/flow_encoder/models
-# Path to folder with pre-trained models
 result_dir: ${root}/flow_encoder/results
+viz_dir: ${root}/visualizations
 
 # Name of the project is accessed by loggers
 project_name: camera-style-flow-encoder
