@@ -3,6 +3,7 @@ import os
 import os.path as osp
 from typing import Tuple
 
+import numpy as np
 from tqdm import tqdm
 import torch
 from torchvision.transforms import Compose, ToTensor
@@ -70,43 +71,52 @@ class ScaleFlow(torch.nn.Module):
     Input/output shape: (H, W, C).
 
     :param unit_module: wether to set all module to 1.
-    :param max_module: value for scaling modules.
+    :param scale_module: value for scaling modules.
     """
 
-    def __init__(self, unit_module: bool = False, max_module: float = None):
+    def __init__(self, unit_module: bool = False, scale_module: float = None):
         super().__init__()
         self.flow_utils = FlowUtils()
 
-        self.max_module = max_module
+        self.scale_module = scale_module
         self.unit_module = unit_module
 
     @staticmethod
     def _scale_module(
-        flow: torch.Tensor, unit_module: bool = False, max_module: float = None
+        flow: torch.Tensor,
+        unit_module: bool = False,
+        scale_module: float = None,
     ) -> torch.Tensor:
         """
         Scale module in polar coordinates between -1 and 1.
-        Input shape (H, W, C)."""
+        Input shape (H, W, C).
+        """
         scaled_flow = torch.zeros_like(flow)
         scaled_flow[:, :, 1] = flow[:, :, 1]
 
         # Set all module to 1
         if unit_module:
             scaled_flow[:, :, 0] = torch.ones_like(scaled_flow[:, :, 0])
-        # Scale modules by `max_mod`
-        else:
-            scaled_flow[:, :, 0] = flow[:, :, 0] / max_module
+        # Scale modules by `scale_module`
+        elif scale_module is not None:
+            height, width, _ = flow.shape
+            module = np.sqrt(height ** 2 + width ** 2)
+            scaled_flow[:, :, 0] = torch.clip(
+                flow[:, :, 0] / (module * scale_module), min=0, max=1
+            )
 
         return scaled_flow
 
     def forward(self, xy_flow: torch.Tensor) -> torch.Tensor:
         """Scale the input flow module."""
         polar_flow = self.flow_utils.xy_to_polar(xy_flow)
+
         scaled_polar_flow = self._scale_module(
             polar_flow,
             unit_module=self.unit_module,
-            max_module=self.max_module,
+            scale_module=self.scale_module,
         )
+
         scaled_xy_flow = self.flow_utils.polar_to_xy(scaled_polar_flow)
 
         return torch.Tensor(scaled_xy_flow)
@@ -134,8 +144,8 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
         help="Path to the directory to save preprocessed flows",
     )
     parser.add_argument(
-        "--max-module",
-        "-m",
+        "--scale-module",
+        "-s",
         type=float,
         default=None,
         help="Target size to resize frames",
@@ -158,19 +168,25 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
     return (
         args.flow_dir,
         args.save_dir,
-        args.max_module,
+        args.scale_module,
         args.unit_module,
         args.frame_size,
     )
 
 
 if __name__ == "__main__":
-    flow_dir, save_dir, max_module, unit_module, frame_size = parse_arguments()
+    (
+        flow_dir,
+        save_dir,
+        scale_module,
+        unit_module,
+        frame_size,
+    ) = parse_arguments()
 
     transforms = Compose(
         [
+            ScaleFlow(unit_module, scale_module),
             ResizeFlow((frame_size, frame_size)),
-            ScaleFlow(unit_module, max_module),
         ]
     )
     for clip_dirname in tqdm(os.listdir(flow_dir)):
@@ -180,6 +196,6 @@ if __name__ == "__main__":
         for flow_filename in sorted(os.listdir(clip_dir)):
             flow_path = osp.join(clip_dir, flow_filename)
             save_flow_path = osp.join(save_clip_dir, flow_filename)
-            flow = load_pth(flow_path)
+            flow = load_pth(flow_path).float()
             preprocessed_flow = transforms(flow)
             save_pth(preprocessed_flow, save_flow_path)
