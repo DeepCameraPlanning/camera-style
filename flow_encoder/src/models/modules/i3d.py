@@ -469,7 +469,8 @@ class ReducedInceptionI3d(nn.Module):
             # output_channels=4,
             output_channels=3,
             kernel_shape=[7, 7, 7],
-            stride=(2, 4, 4),
+            # stride=(2, 4, 4),
+            stride=(2, 2, 2),
             padding=(3, 3, 3),
             name=name + end_point,
         )
@@ -551,6 +552,7 @@ class ReducedInceptionI3d(nn.Module):
         self.end_points[end_point] = InceptionModule(
             16, [6, 3, 10, 1, 2, 4], name + end_point
         )
+        # 32, [18, 8, 20, 1, 4, 6], name + end_point
         if self._final_endpoint == end_point:
             self.build()
             return
@@ -595,6 +597,7 @@ class ReducedInceptionI3d(nn.Module):
         self.end_points[end_point] = MaxPool3dSamePadding(
             kernel_size=[2, 2, 2], stride=(2, 2, 2), padding=0
         )
+        # kernel_size=[2, 2, 2], stride=(2, 2, 2), padding=(0, 1, 1)
         if self._final_endpoint == end_point:
             self.build()
             return
@@ -610,12 +613,27 @@ class ReducedInceptionI3d(nn.Module):
 
         end_point = "Mixed_5c"
         self.end_points[end_point] = InceptionModule(
-            28, [6, 4, 18, 6, 4, 4], name + end_point
+            28, [4, 4, 11, 6, 3, 3], name + end_point
         )
+        # 28, [4, 4, 6, 6, 3, 3], name + end_point
         # 58, [16, 14, 32, 6, 8, 8], name + end_point
         if self._final_endpoint == end_point:
             self.build()
             return
+
+        # end_point = "Logits"
+        # self.avg_pool = nn.AvgPool3d(kernel_size=[2, 7, 7], stride=(1, 1, 1))
+        # self.logits = Unit3D(
+        #     in_channels=64,
+        #     output_channels=400,
+        #     kernel_shape=[1, 1, 1],
+        #     padding=0,
+        #     activation_fn=None,
+        #     use_batch_norm=False,
+        #     use_bias=True,
+        #     name="logits",
+        # )
+        # self.build()
 
     def build(self):
         for k in self.end_points.keys():
@@ -684,16 +702,16 @@ class DecoderConv3D(nn.Module):
     VALID_ENDPOINTS = (
         "Conv3d_1_1x1",
         "Upconv3d_2a",
-        "Conv3d_2b_3x3",
+        # "Conv3d_2b_3x3",
         "Conv3d_2c_3x3",
         "Upconv3d_3a",
-        "Conv3d_3b_3x3",
+        # "Conv3d_3b_3x3",
         "Conv3d_3c_3x3",
         "Upconv3d_4a",
-        "Conv3d_4b_3x3",
+        # "Conv3d_4b_3x3",
         "Conv3d_4c_3x3",
         "Upconv3d_5a",
-        "Conv3d_5b_3x3",
+        # "Conv3d_5b_3x3",
         "Upconv3d_6",
     )
 
@@ -706,6 +724,7 @@ class DecoderConv3D(nn.Module):
         self.end_points[end_point] = Unit3D(
             in_channels=latent_dim,
             # output_channels=58,
+            # output_channels=28,
             output_channels=28,
             kernel_shape=[1, 1, 1],
             padding=0,
@@ -716,15 +735,22 @@ class DecoderConv3D(nn.Module):
         # block_dim = 58
         block_dim = 28
         self.end_points[end_point] = nn.Sequential(
+            # nn.ConvTranspose3d(
+            #     block_dim, block_dim, (4, 2, 2), (2, 2, 2), 1, bias=False
+            # ),
             nn.ConvTranspose3d(
-                block_dim, block_dim, (4, 3, 3), (2, 2, 2), 1, bias=False
+                block_dim, block_dim, (4, 4, 4), (2, 2, 2), 1, bias=False
             ),
+            # nn.ConvTranspose3d(
+            #     block_dim, block_dim, (4, 3, 3), (2, 2, 2), 1, bias=False
+            # ),
             nn.BatchNorm3d(block_dim),
             nn.ReLU(inplace=True),
         )
         end_point = "Conv3d_2b_3x3"
         self.end_points[end_point] = Unit3D(
-            in_channels=2 * block_dim,
+            # in_channels=2 * block_dim,
+            in_channels=block_dim,
             output_channels=block_dim,
             kernel_shape=[3, 3, 3],
             padding=0,
@@ -750,7 +776,8 @@ class DecoderConv3D(nn.Module):
         )
         end_point = "Conv3d_3b_3x3"
         self.end_points[end_point] = Unit3D(
-            in_channels=2 * block_dim,
+            # in_channels=2 * block_dim,
+            in_channels=block_dim,
             output_channels=block_dim,
             kernel_shape=[3, 3, 3],
             padding=0,
@@ -778,7 +805,8 @@ class DecoderConv3D(nn.Module):
         )
         end_point = "Conv3d_4b_3x3"
         self.end_points[end_point] = Unit3D(
-            in_channels=2 * block_dim,
+            # in_channels=2 * block_dim,
+            in_channels=block_dim,
             output_channels=block_dim,
             kernel_shape=[3, 3, 3],
             padding=0,
@@ -806,7 +834,8 @@ class DecoderConv3D(nn.Module):
         )
         end_point = "Conv3d_5b_3x3"
         self.end_points[end_point] = Unit3D(
-            in_channels=2 * block_dim,
+            # in_channels=2 * block_dim,
+            in_channels=block_dim,
             output_channels=block_dim,
             kernel_shape=[3, 3, 3],
             padding=0,
@@ -816,7 +845,8 @@ class DecoderConv3D(nn.Module):
         end_point = "Upconv3d_6"
         self.end_points[end_point] = nn.Sequential(
             # nn.ConvTranspose3d(4, 2, (4, 6, 6), (2, 4, 4), 1, bias=False),
-            nn.ConvTranspose3d(3, 2, (4, 6, 6), (2, 4, 4), 1, bias=False),
+            # nn.ConvTranspose3d(3, 2, (4, 6, 6), (2, 4, 4), 1, bias=False),
+            nn.ConvTranspose3d(3, 2, (4, 4, 4), (2, 2, 2), 1, bias=False),
             nn.BatchNorm3d(2),
         )
 
@@ -870,36 +900,42 @@ class AutoencoderI3D(nn.Module):
         self.decoder = DecoderConv3D(in_channels, latent_dim)
 
     def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Encode
+        latent_features, residual_features = self._encode(x)
+        out = self._decode(latent_features, residual_features)
+        return latent_features, out
+
+    def extract_features(self, x) -> torch.Tensor:
+        for end_point in self.encoder.VALID_ENDPOINTS:
+            if end_point in self.encoder.end_points:
+                x = self.encoder._modules[end_point](x)
+        return x
+
+    def _encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         residual_features = []
         for end_point in self.encoder.VALID_ENDPOINTS:
             if end_point in self.encoder.end_points:
                 if isinstance(self.encoder._modules[end_point], nn.MaxPool3d):
                     residual_features.append(x)
                 x = self.encoder._modules[end_point](x)
-            print(end_point, x.shape)
-        latent_features = x
+                # print(end_point, x.shape)
+        return x, residual_features
 
-        # Decode
-        up_conv_count = 0
+    def _decode(
+        self, x: torch.Tensor, residual_features: torch.Tensor
+    ) -> torch.Tensor:
+        # up_conv_count = 0
         for end_point in self.decoder.VALID_ENDPOINTS:
             x = self.decoder._modules[end_point](x)
-            if (
-                isinstance(self.decoder._modules[end_point], nn.Sequential)
-                and end_point != "Upconv3d_6"
-            ):
-                up_conv_count += 1
-                x = torch.hstack([x, residual_features[-up_conv_count]])
-            print(end_point, x.shape)
+            # if (
+            #     isinstance(self.decoder._modules[end_point], nn.Sequential)
+            #     and end_point != "Upconv3d_6"
+            # ):
+            #     up_conv_count += 1
+            #     x = torch.hstack([x, residual_features[-up_conv_count]])
+            # print(end_point, x.shape)
         out = self.decoder.tanh(x)
 
-        return latent_features, out
-
-    def extract_features(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
-        for end_point in self.encoder.VALID_ENDPOINTS:
-            if end_point in self.encoder.end_points:
-                x = self.encoder._modules[end_point](x)
-        return x
+        return out
 
 
 def make_flow_encoder(pretrained_path: str) -> nn.Module:
@@ -923,7 +959,7 @@ def make_flow_autoencoder(pretrained_path: str) -> nn.Module:
     :param pretrained_path: if provided load the model stored at this location.
     :return: configured flow autoencoder.
     """
-    model = SimpleAutoencoderI3D(in_channels=2, latent_dim=1024)
+    model = AutoencoderI3D(in_channels=2, latent_dim=21)
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
@@ -933,7 +969,7 @@ def make_flow_autoencoder(pretrained_path: str) -> nn.Module:
 
 
 if __name__ == "__main__":
-    model = AutoencoderI3D(in_channels=2, latent_dim=32)
+    model = AutoencoderI3D(in_channels=2, latent_dim=21)
 
     x = torch.rand((1, 2, 16, 224, 224))
     model(x)
