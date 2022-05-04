@@ -52,5 +52,5 @@ if __name__ == "__main__":
         create_dir(flow_dir)
         for k in range(len(flows) - 1):
             flow_filename = osp.join(flow_dir, str(k).zfill(4) + ".pth")
-            flow_tensor = torch.from_numpy(flows[k])
+            flow_tensor = torch.from_numpy(flows[k]) * 224
             save_pth(flow_tensor, flow_filename)

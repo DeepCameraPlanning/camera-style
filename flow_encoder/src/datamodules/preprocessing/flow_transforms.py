@@ -3,7 +3,6 @@ import os
 import os.path as osp
 from typing import Tuple
 
-import numpy as np
 from tqdm import tqdm
 import torch
 from torchvision.transforms import Compose, ToTensor
@@ -11,6 +10,22 @@ import torchvision.transforms.functional as F
 
 from utils.file_utils import create_dir, load_pth, save_pth
 from utils.flow_utils import FlowUtils
+
+
+def generalized_logistic(
+    x: torch.Tensor,
+    B: torch.Tensor,
+    Q: torch.Tensor,
+    A: torch.Tensor = 0,
+    K: torch.Tensor = 1,
+    C: torch.Tensor = 1,
+):
+    return A + ((K - A) / (C + Q * torch.exp(-B * torch.tensor(x))))
+
+
+# RAFT
+# B = torch.tensor(0.6090)
+# Q = torch.tensor(25.2964)
 
 
 class ResizeFlow(torch.nn.Module):
@@ -72,20 +87,32 @@ class ScaleFlow(torch.nn.Module):
 
     :param unit_module: wether to set all module to 1.
     :param scale_module: value for scaling modules.
+    :param step_module: value for scaling modules.
+    :param quantile: quantile values (q1, q9) for scaling modules.
     """
 
-    def __init__(self, unit_module: bool = False, scale_module: float = None):
+    def __init__(
+        self,
+        unit_module: bool = False,
+        scale_module: float = None,
+        step_module: float = None,
+        quantiles: Tuple[float, float] = None,
+    ):
         super().__init__()
         self.flow_utils = FlowUtils()
 
         self.scale_module = scale_module
         self.unit_module = unit_module
+        self.step_module = step_module
+        self.quantiles = quantiles
 
     @staticmethod
     def _scale_module(
         flow: torch.Tensor,
         unit_module: bool = False,
         scale_module: float = None,
+        step_module: float = None,
+        quantiles: float = None,
     ) -> torch.Tensor:
         """
         Scale module in polar coordinates between -1 and 1.
@@ -99,11 +126,19 @@ class ScaleFlow(torch.nn.Module):
             scaled_flow[:, :, 0] = torch.ones_like(scaled_flow[:, :, 0])
         # Scale modules by `scale_module`
         elif scale_module is not None:
-            height, width, _ = flow.shape
-            module = np.sqrt(height ** 2 + width ** 2)
             scaled_flow[:, :, 0] = torch.clip(
-                flow[:, :, 0] / (module * scale_module), min=0, max=1
+                flow[:, :, 0] / scale_module, min=0, max=1
             )
+        elif step_module is not None:
+            scaled_flow[:, :, 0] = 1 * (flow[:, :, 0] > step_module)
+        # Scale modules with a logistic
+        else:
+            q1, q9 = quantiles
+            a = 1 / 0.05
+            b = 1 / 0.95
+            B = torch.log(torch.tensor((a - 1) / (b - 1))) / (q9 - q1)
+            Q = (a - 1) * torch.exp(B * q1)
+            scaled_flow[:, :, 0] = generalized_logistic(flow[:, :, 0], B, Q)
 
         return scaled_flow
 
@@ -115,6 +150,8 @@ class ScaleFlow(torch.nn.Module):
             polar_flow,
             unit_module=self.unit_module,
             scale_module=self.scale_module,
+            step_module=self.step_module,
+            quantiles=self.quantiles,
         )
 
         scaled_xy_flow = self.flow_utils.polar_to_xy(scaled_polar_flow)
@@ -145,7 +182,14 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
     )
     parser.add_argument(
         "--scale-module",
-        "-s",
+        "-sc",
+        type=float,
+        default=None,
+        help="Target size to resize frames",
+    )
+    parser.add_argument(
+        "--step-module",
+        "-st",
         type=float,
         default=None,
         help="Target size to resize frames",
@@ -157,12 +201,18 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
         help="Wether to set all module to 1",
     )
     parser.add_argument(
-        "--frame-size",
-        "-f",
-        type=int,
-        default=224,
-        help="Target size to resize frames",
+        "-q1",
+        type=float,
+        default=None,
+        help="Wether to logistic normalize with q1",
     )
+    parser.add_argument(
+        "-q9",
+        type=float,
+        default=None,
+        help="Wether to logistic normalize with q9",
+    )
+
     args = parser.parse_args()
 
     return (
@@ -170,7 +220,9 @@ def parse_arguments() -> Tuple[str, float, bool, int]:
         args.save_dir,
         args.scale_module,
         args.unit_module,
-        args.frame_size,
+        args.step_module,
+        args.q1,
+        args.q9,
     )
 
 
@@ -180,13 +232,15 @@ if __name__ == "__main__":
         save_dir,
         scale_module,
         unit_module,
-        frame_size,
+        step_module,
+        q1,
+        q9,
     ) = parse_arguments()
 
     transforms = Compose(
         [
-            ScaleFlow(unit_module, scale_module),
-            ResizeFlow((frame_size, frame_size)),
+            ScaleFlow(unit_module, scale_module, step_module, (q1, q9)),
+            ResizeFlow((224, 224)),
         ]
     )
     for clip_dirname in tqdm(os.listdir(flow_dir)):

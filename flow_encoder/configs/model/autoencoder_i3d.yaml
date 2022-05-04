@@ -14,5 +14,3 @@ momentum: 0.9
 n_frames: 16
 stride: 16
 frame_size: 224
-unity_mod_max: 0.14
-raft_mod_max: 165.53
