@@ -16,10 +16,8 @@ class I3DContrastiveAutoencoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
+        model_size: str,
         check_dir: str,
-        histogram: bool,
-        triplet_coef: float,
-        reconstruction_coef: float,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -39,7 +37,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         self.reconstruction_loss = MSELoss()
         self.loss_weights = torch.nn.Parameter(torch.ones(2))
 
-        self.model = make_flow_autoencoder(pretrained_path)
+        self.model = make_flow_autoencoder(pretrained_path, model_size)
 
         self._check_dir = check_dir
         self._flow_utils = FlowUtils()

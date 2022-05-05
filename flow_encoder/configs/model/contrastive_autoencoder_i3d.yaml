@@ -1,6 +1,10 @@
 module_name: contrastive_autoencoder_i3d
 
 histogram: false
+grid_dims: [6, 10]
+n_angle_bins: 8
+
+model_size: small
 pretrained_path: null
 checkpoint_path: ${checkpoint_dirpath}/contrastive_autoencoder_last.ckpt
 optimizer: adam

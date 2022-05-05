@@ -1,6 +1,10 @@
 module_name: flow_histogram
 
 histogram: true
+grid_dims: [6, 10]
+n_angle_bins: 8
+
+model_size: small
 pretrained_path: ${model_dir}/flow_imagenet.pt
 checkpoint_path: ${checkpoint_dirpath}/encoder_last.ckpt
 optimizer: adam

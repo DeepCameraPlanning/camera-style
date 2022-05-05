@@ -51,14 +51,12 @@ def train(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
-        "histogram": False,
     }
 
     if config.model.module_name == "encoder_i3d":
+        model_params["histogram"] = config.model.histogram
         model = I3DEncoderModel(**model_params)
     elif config.model.module_name == "contrastive_autoencoder_i3d":
-        model_params["triplet_coef"] = config.model.triplet_coef
-        model_params["reconstruction_coef"] = config.model.reconstruction_coef
         model_params["check_dir"] = config.datamodule.check_dir
         model = I3DContrastiveAutoencoderModel(**model_params)
     elif config.model.module_name == "autoencoder_i3d":
