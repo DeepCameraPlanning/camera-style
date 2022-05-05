@@ -71,6 +71,7 @@ def extract_features(config: DictConfig):
         model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
         extractor = I3DAutoencoderModel(**model_params)
+        extractor = extractor.to(device)
 
     extracted_features = {}
     for batch in tqdm(data_loader):
