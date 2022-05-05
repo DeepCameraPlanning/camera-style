@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path as osp
+from typing import Any, List
 
 from tqdm import tqdm
 
@@ -34,6 +35,12 @@ def parse_arguments():
     return args
 
 
+def split_chunks(array: List[Any], chunk_size: int):
+    """Yield successive n-sized chunks from `array`."""
+    for i in range(0, len(array), chunk_size):
+        yield array[i : i + chunk_size]
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     video_dir = args.video_dir
@@ -51,7 +58,7 @@ if __name__ == "__main__":
     else:
         video_ids = load_pickle(video_ids_filename)
 
-    people_detector = PeopleDetector(batch_size=32)
+    people_detector = PeopleDetector(batch_size=16, verbose=True)
     for video_id in tqdm(video_ids):
         video_path = osp.join(video_dir, video_id)
         save_name = video_id[:-3] + "pk"
@@ -59,7 +66,17 @@ if __name__ == "__main__":
         height, width, _ = frames[0].shape
 
         raw_detections_path = osp.join(raw_detections_dir, save_name)
-        raw_detections = people_detector.detect_people(frames)
+        if osp.exists(raw_detections_path):
+            continue
+
+        bboxes, masks, scores = [], [], []
+        for frame_chunk in split_chunks(frames, 300):
+            raw_detections = people_detector.detect_people(frame_chunk)
+            bboxes.extend(raw_detections[0])
+            masks.extend(raw_detections[1])
+            scores.extend(raw_detections[2])
+        raw_detections = (bboxes, masks, scores)
+
         save_pickle([(height, width), raw_detections], raw_detections_path)
 
         tracked_detections_path = osp.join(tracked_detections_dir, save_name)

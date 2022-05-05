@@ -76,7 +76,7 @@ class PeopleDetector:
         self.trainer = Trainer(
             gpus=num_gpus,
             num_nodes=num_nodes,
-            strategy="dp",
+            strategy="ddp",
             logger=False,
             enable_progress_bar=enable_progress_bar,
         )
