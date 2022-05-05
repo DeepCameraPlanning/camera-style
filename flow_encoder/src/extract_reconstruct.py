@@ -42,7 +42,6 @@ def extract_reconstruct(config: DictConfig):
     )
     # Initialize model
     model_params = {
-        "histogram": config.model.histogram,
         "pretrained_path": None,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
@@ -52,16 +51,15 @@ def extract_reconstruct(config: DictConfig):
     }
     device = "cuda" if config.compnode.num_gpus > 0 else "cpu"
 
-    if config.model.module_name == "autoencoder_i3d":
-        model_params["triplet_coef"] = config.model.triplet_coef
-        model_params["reconstruction_coef"] = config.model.reconstruction_coef
-        model_params["check_dir"] = config.datamodule.check_dir
+    if config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["checkpoint_path"] = config.model.checkpoint_path
+        model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
             **model_params
         )
         extractor = extractor.to(device)
     elif config.model.module_name == "autoencoder_i3d":
+        model_params["checkpoint_path"] = config.model.checkpoint_path
         model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
         extractor = I3DAutoencoderModel(**model_params)

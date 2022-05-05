@@ -1,7 +1,7 @@
 n_classes: 2
 split_dir: ${data_dir}/splits
-unity_dir: ${data_dir}/flows/flow_unity_unit_pth
-raft_dir: ${data_dir}/flows/flow_raft_unit_pth
+unity_dir: ${data_dir}/flows/flow_unity_step_pth
+raft_dir: ${data_dir}/flows/flow_raft_step_pth
 check_dir: ${hydra:run.dir}/check
 masked: false
 n_temporal_mask: 1

@@ -17,7 +17,7 @@ class FlowUtils:
     """
 
     def __init__(
-        self, bgr: bool = False, sensitivity: int = 10, epsilon: float = 1e-5
+        self, bgr: bool = False, sensitivity: int = 1, epsilon: float = 1e-5
     ):
         self._bgr = bgr
         self._sensitivity = sensitivity
@@ -271,7 +271,7 @@ class FlowUtils:
         x, y = flow[:, :, 0], flow[:, :, 1]
 
         theta = np.arctan2(y, -x)
-        module = np.sqrt(x**2 + y**2)
+        module = np.sqrt(x ** 2 + y ** 2)
 
         hue = (theta + np.pi) / (2 * np.pi)
         sat = np.ones(hue.shape)

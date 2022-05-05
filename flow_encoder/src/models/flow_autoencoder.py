@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import torch
-from torch.nn import MSELoss
+from torch.nn import MSELoss  # , L1Loss()
 from pytorch_lightning import LightningModule
 
 from flow_encoder.src.models.modules.i3d import make_flow_autoencoder
@@ -15,9 +15,9 @@ class I3DAutoencoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
+        model_size: str,
         flow_type: str,
         check_dir: str,
-        histogram: bool,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -33,10 +33,10 @@ class I3DAutoencoderModel(LightningModule):
         self._batch_size = batch_size
         self._flow_type = flow_type
 
-        self.loss = MSELoss()
         # self.loss = L1Loss()
+        self.loss = MSELoss()
 
-        self.model = make_flow_autoencoder(pretrained_path)
+        self.model = make_flow_autoencoder(pretrained_path, model_size)
 
         self._check_dir = check_dir
         self.flow_utils = FlowUtils()

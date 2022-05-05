@@ -20,8 +20,8 @@ root_dir = [os.sep] + osp.dirname(osp.abspath(__file__)).split(os.sep)[:-2]
 import_dir = ["lib", "RAFT", "core"]
 sys.path.append(osp.join(*root_dir + import_dir))
 from raft import RAFT
-from utils.flow_viz import flow_to_image
-from utils.utils import InputPadder
+from lib.RAFT.core.utils.flow_viz import flow_to_image
+from lib.RAFT.core.utils.utils import InputPadder
 
 
 class RAFTModel(LightningModule):
@@ -262,7 +262,7 @@ class MotionDetector:
                 y_subflow = sub_flow[:, :, 1]
                 # Compute angles and magnitudes
                 flow_angle = np.arctan2(y_subflow, x_subflow)
-                flow_magnitude = np.sqrt(x_subflow**2 + y_subflow**2)
+                flow_magnitude = np.sqrt(x_subflow ** 2 + y_subflow ** 2)
                 # Filter low magnitude angles and average angles
                 angle = (
                     flow_angle.mean()

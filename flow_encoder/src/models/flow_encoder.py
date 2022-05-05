@@ -12,7 +12,10 @@ class I3DEncoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
+        model_size: str,
         histogram: bool,
+        grid_dims: Tuple[int, int],
+        n_angle_bins: int,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
@@ -29,9 +32,9 @@ class I3DEncoderModel(LightningModule):
         self.criterion = TripletMarginLoss()
 
         if histogram:
-            self.model = make_flow_histogram(grid_dims=(6, 10), n_angle_bins=8)
+            self.model = make_flow_histogram(grid_dims, n_angle_bins)
         else:
-            self.model = make_flow_encoder(pretrained_path)
+            self.model = make_flow_encoder(pretrained_path, model_size)
 
     def _shared_log_step(self, mode: str, loss: torch.Tensor):
         """Log metrics at each epoch and each step for the training."""

@@ -25,6 +25,7 @@ def extract_features(config: DictConfig):
     model_params = {
         "checkpoint_path": config.model.checkpoint_path,
         "pretrained_path": None,
+        "model_size": config.model.model_size,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
