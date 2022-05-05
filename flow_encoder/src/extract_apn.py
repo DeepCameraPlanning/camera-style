@@ -4,7 +4,9 @@ import os.path as osp
 from pytorch_lightning import Trainer
 
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
-from flow_encoder.src.models.contrastive_flow_encoder import I3DEncoderModel
+from flow_encoder.src.models.contrastive_flow_encoder import (
+    I3DContrastiveEncoderModel,
+)
 from utils.file_utils import create_dir, save_pickle
 
 
@@ -26,13 +28,14 @@ def extract_features(config: DictConfig):
         "checkpoint_path": config.model.checkpoint_path,
         "pretrained_path": None,
         "model_size": config.model.model_size,
+        "margin": config.model.margin,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
     }
-    model = I3DEncoderModel.load_from_checkpoint(**model_params)
+    model = I3DContrastiveEncoderModel.load_from_checkpoint(**model_params)
 
     trainer = Trainer(
         gpus=config.compnode.num_gpus,

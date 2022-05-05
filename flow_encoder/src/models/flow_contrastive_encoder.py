@@ -8,7 +8,7 @@ from flow_encoder.src.models.modules.i3d import make_flow_encoder
 from flow_encoder.src.models.modules.flow_histogram import make_flow_histogram
 
 
-class I3DEncoderModel(LightningModule):
+class I3DContrastiveEncoderModel(LightningModule):
     def __init__(
         self,
         pretrained_path: str,
@@ -17,6 +17,7 @@ class I3DEncoderModel(LightningModule):
         grid_dims: Tuple[int, int],
         n_angle_bins: int,
         optimizer: str,
+        margin: float,
         learning_rate: float,
         weight_decay: float,
         momentum: float,
@@ -29,7 +30,7 @@ class I3DEncoderModel(LightningModule):
         self._weight_decay = weight_decay
         self._momentum = momentum
         self._batch_size = batch_size
-        self.criterion = TripletMarginLoss()
+        self.criterion = TripletMarginLoss(margin)
 
         if histogram:
             self.model = make_flow_histogram(grid_dims, n_angle_bins)

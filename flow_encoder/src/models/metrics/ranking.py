@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class RankingLoss(nn.Module):
-    def __init__(self, margin: float = 2.0):
+    def __init__(self, margin: float = 1.0):
         super(RankingLoss, self).__init__()
         self.pdist = nn.PairwiseDistance(p=2)
         self.margin = margin

@@ -11,7 +11,9 @@ from flow_encoder.src.datamodules.datasets.single_dataset import (
 from flow_encoder.src.datamodules.datasets.mask_dataset import (
     MaskFlowDataset,
 )
-from flow_encoder.src.models.flow_encoder import I3DEncoderModel
+from flow_encoder.src.models.flow_contrastive_encoder import (
+    I3DContrastiveEncoderModel,
+)
 from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
@@ -54,17 +56,21 @@ def extract_features(config: DictConfig):
 
     if config.model.histogram:
         model_params["histogram"] = config.model.histogram
-        extractor = I3DEncoderModel(**model_params)
-    elif config.model.module_name == "encoder_i3d":
+        extractor = I3DContrastiveEncoderModel(**model_params)
+    elif config.model.module_name == "contrastive_encoder_i3d":
         model_params["histogram"] = config.model.histogram
+        model_params["margin"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        extractor = I3DEncoderModel.load_from_checkpoint(**model_params)
+        extractor = I3DContrastiveEncoderModel.load_from_checkpoint(
+            **model_params, strict=False
+        )
         extractor = extractor.to(device)
     elif config.model.module_name == "contrastive_autoencoder_i3d":
+        model_params["margin"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
         model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
-            **model_params
+            **model_params, strict=False
         )
         extractor = extractor.to(device)
     elif config.model.module_name == "autoencoder_i3d":

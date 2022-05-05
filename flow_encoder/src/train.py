@@ -6,7 +6,9 @@ from pytorch_lightning.loggers import WandbLogger
 
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
 from flow_encoder.src.models.callbacks.gradnorm import GradNorm
-from flow_encoder.src.models.flow_encoder import I3DEncoderModel
+from flow_encoder.src.models.flow_contrastive_encoder import (
+    I3DContrastiveEncoderModel,
+)
 from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
@@ -46,6 +48,7 @@ def train(config: DictConfig):
     # Initialize model
     model_params = {
         "pretrained_path": config.model.pretrained_path,
+        "model_size": config.model.model_size,
         "optimizer": config.model.optimizer,
         "learning_rate": config.model.learning_rate,
         "weight_decay": config.model.weight_decay,
@@ -53,10 +56,12 @@ def train(config: DictConfig):
         "batch_size": config.compnode.batch_size,
     }
 
-    if config.model.module_name == "encoder_i3d":
+    if config.model.module_name == "contrastive_encoder_i3d":
+        model_params["margin"] = config.model.margin
         model_params["histogram"] = config.model.histogram
-        model = I3DEncoderModel(**model_params)
+        model = I3DContrastiveEncoderModel(**model_params)
     elif config.model.module_name == "contrastive_autoencoder_i3d":
+        model_params["margin"] = config.model.margin
         model_params["check_dir"] = config.datamodule.check_dir
         model = I3DContrastiveAutoencoderModel(**model_params)
     elif config.model.module_name == "autoencoder_i3d":

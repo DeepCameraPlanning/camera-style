@@ -52,6 +52,7 @@ def extract_reconstruct(config: DictConfig):
     device = "cuda" if config.compnode.num_gpus > 0 else "cpu"
 
     if config.model.module_name == "contrastive_autoencoder_i3d":
+        model_params["margin"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
         model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(

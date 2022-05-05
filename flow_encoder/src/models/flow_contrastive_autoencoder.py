@@ -19,6 +19,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         model_size: str,
         check_dir: str,
         optimizer: str,
+        margin: float,
         learning_rate: float,
         weight_decay: float,
         momentum: float,
@@ -33,7 +34,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         self._batch_size = batch_size
 
         # self.contrastive_loss = TripletMarginLoss()
-        self.contrastive_loss = RankingLoss()
+        self.contrastive_loss = RankingLoss(margin)
         self.reconstruction_loss = MSELoss()
         self.loss_weights = torch.nn.Parameter(torch.ones(2))
 
