@@ -3,8 +3,6 @@ module_name: contrastive_autoencoder_i3d
 histogram: false
 pretrained_path: null
 checkpoint_path: ${checkpoint_dirpath}/contrastive_autoencoder_last.ckpt
-triplet_coef: 0.5
-reconstruction_coef: 5
 optimizer: adam
 softmax: false
 learning_rate: 1e-3

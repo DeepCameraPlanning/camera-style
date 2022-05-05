@@ -3,9 +3,10 @@ from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import torch
-from torch.nn import MSELoss, TripletMarginLoss, L1Loss
+from torch.nn import MSELoss  # , TripletMarginLoss
 from pytorch_lightning import LightningModule
 
+from flow_encoder.src.models.metrics.ranking import RankingLoss
 from flow_encoder.src.models.modules.i3d import make_flow_autoencoder
 from utils.flow_utils import FlowUtils
 from utils.file_utils import create_dir
@@ -33,16 +34,31 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         self._momentum = momentum
         self._batch_size = batch_size
 
-        self._triplet_coef = triplet_coef
-        self.triplet_loss = TripletMarginLoss()
-        self._reconstruction_coef = reconstruction_coef
+        # self.contrastive_loss = TripletMarginLoss()
+        self.contrastive_loss = RankingLoss()
         self.reconstruction_loss = MSELoss()
-        # self.reconstruction_loss = L1Loss()
+        self.loss_weights = torch.nn.Parameter(torch.ones(2))
 
         self.model = make_flow_autoencoder(pretrained_path)
 
         self._check_dir = check_dir
         self._flow_utils = FlowUtils()
+
+    @staticmethod
+    def get_pair_labels(
+        pos_feats: torch.Tensor, neg_feats: torch.Tensor
+    ) -> torch.Tensor:
+        """Build a binary label vector: 1 for positive sample pairs, 0 otws."""
+        y = torch.cat(
+            [
+                torch.ones(pos_feats.shape[0], device=pos_feats.device),
+                torch.zeros(neg_feats.shape[0], device=pos_feats.device),
+            ]
+        )
+        return y
+
+    def backward(self, loss, optimizer, idx):
+        loss.backward(retain_graph=True)
 
     def _shared_log_step(
         self,
@@ -83,6 +99,26 @@ class I3DContrastiveAutoencoderModel(LightningModule):
             sync_dist=True,
             batch_size=self._batch_size,
         )
+        self.log(
+            f"{mode}/contrastive_weight",
+            self.loss_weights[0],
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+            sync_dist=True,
+            batch_size=self._batch_size,
+        )
+        self.log(
+            f"{mode}/reconstruction_weight",
+            self.loss_weights[1],
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+            sync_dist=True,
+            batch_size=self._batch_size,
+        )
 
     def _log_check(self, gt_flows: torch.Tensor, pred_flows: torch.Tensor):
         """Log pred and gt flow."""
@@ -117,7 +153,13 @@ class I3DContrastiveAutoencoderModel(LightningModule):
 
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
-    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Dict[str, torch.Tensor],
+    ]:
         """
         Extract features from anchor, positive and negative flows, and compute
         the triplet loss between these outputs.
@@ -130,14 +172,18 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         positive_features, _ = self.model(positive_flows)
         negative_features, _ = self.model(negative_flows)
 
-        triplet_value = self._triplet_coef * self.triplet_loss(
-            anchor_features, positive_features, negative_features
+        anchor_features = torch.cat([anchor_features, anchor_features])
+        all_features = torch.cat([positive_features, negative_features])
+        labels = self.get_pair_labels(positive_features, negative_features)
+
+        contrastive_value = self.contrastive_loss(
+            anchor_features, all_features, labels
         )
-        reconstruction_value = (
-            self._reconstruction_coef
-            * self.reconstruction_loss(anchor_out, anchor_flows)
+        reconstruction_value = self.reconstruction_loss(
+            anchor_out, anchor_flows
         )
-        total_loss = triplet_value + reconstruction_value
+        self.task_loss = torch.stack([contrastive_value, reconstruction_value])
+        self.total_loss = torch.mul(self.loss_weights, self.task_loss).sum()
         outputs = {
             "positive_clipname": batch["positive_clipname"],
             "negative_clipname": batch["negative_clipname"],
@@ -155,16 +201,17 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         ):
             self._log_check(anchor_flows, anchor_out)
 
-        return total_loss, triplet_value, reconstruction_value, outputs
+        return self.total_loss, self.task_loss, outputs
 
     def training_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Training loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, triplet_value, reconstruction_value, _ = out
+        total_loss, task_loss, _ = out
+        contrastive_value, reconstruction_value = task_loss
         self._shared_log_step(
-            "train", total_loss, triplet_value, reconstruction_value
+            "train", total_loss, contrastive_value, reconstruction_value
         )
 
         return {"loss": total_loss}
@@ -174,9 +221,10 @@ class I3DContrastiveAutoencoderModel(LightningModule):
     ) -> Dict[str, torch.Tensor]:
         """Validation loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, triplet_value, reconstruction_value, _ = out
+        total_loss, task_loss, _ = out
+        contrastive_value, reconstruction_value = task_loss
         self._shared_log_step(
-            "val", total_loss, triplet_value, reconstruction_value
+            "val", total_loss, contrastive_value, reconstruction_value
         )
 
         return {"loss": total_loss}
@@ -186,11 +234,12 @@ class I3DContrastiveAutoencoderModel(LightningModule):
     ) -> Dict[str, torch.Tensor]:
         """Test loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, triplet_value, reconstruction_value, outputs = out
+        total_loss, task_loss, outputs = out
+        contrastive_value, reconstruction_value = task_loss
 
         return {
             "loss": total_loss,
-            "triplet_value": triplet_value,
+            "contrastive_value": contrastive_value,
             "reconstruction_value": reconstruction_value,
             "out": outputs,
         }

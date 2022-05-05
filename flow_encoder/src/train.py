@@ -5,6 +5,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 
 from flow_encoder.src.datamodules.flow_datamodule import TripletFlowDataModule
+from flow_encoder.src.models.callbacks.gradnorm import GradNorm
 from flow_encoder.src.models.flow_encoder import I3DEncoderModel
 from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
@@ -39,6 +40,8 @@ def train(config: DictConfig):
         filename=config.xp_name + "-{epoch}-{val_loss:.2f}",
     )
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    grad_norm = GradNorm()
+    callbacks = [lr_monitor, checkpoint, grad_norm]
 
     # Initialize model
     model_params = {
@@ -68,7 +71,7 @@ def train(config: DictConfig):
         num_nodes=config.compnode.num_nodes,
         accelerator=config.compnode.accelerator,
         max_epochs=config.num_epochs,
-        callbacks=[lr_monitor, checkpoint],
+        callbacks=callbacks,
         logger=wandb_logger,
         log_every_n_steps=5,
         # precision=16,

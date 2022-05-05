@@ -4,7 +4,7 @@ defaults:
   - model: encoder_i3d.yaml
   - datamodule: unit_flow.yaml
 
-num_epochs: 51
+num_epochs: 101
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
