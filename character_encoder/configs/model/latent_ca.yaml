@@ -1,20 +1,20 @@
 module_name: latent_cross_attention
 
-autoencoder_ckpt_path: ${flow_checkpoint_dirpath}/flat-autoencoder-mse.ckpt
+autoencoder_ckpt_path: ${flow_checkpoint_dirpath}/flow-last.ckpt
 checkpoint_path: ${character_checkpoint_dirpath}/character-last.ckpt
 optimizer: adam
-learning_rate: 1e-2
+learning_rate: 1e-3
 weight_decay: 1e-4
 momentum: 0.9
 
-bbox_coef: 10
-reconstruction_coef: 0.5
+bbox_coef: 1.
+reconstruction_coef: 0.
 
 num_freq_bands: 6
 max_freq: 10.0
 depth: 1
 cross_heads: 1
-cross_dim_head: 16
+cross_dim_head: 8
 attn_dropout: 0.0
 ff_dropout: 0.0
 weight_tie_layers: False

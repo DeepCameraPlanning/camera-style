@@ -34,5 +34,6 @@ class IOULoss(nn.Module):
 
         area_union = pred_area + target_area - area_intersect + 1e-7
         ious = area_intersect / area_union
+        loss = 1 - ious
 
-        return ious.mean()
+        return loss.mean()

@@ -1,12 +1,8 @@
 defaults:
   - _self_
-  - compnode: light_1n_1g_28b.yaml
+  - compnode: light_1n_1g_64b.yaml
   - model: latent_ca.yaml
   - datamodule: latent_bbox.yaml
-
-hydra:
-  run:
-    dir: ${hydra:runtime.cwd}/character_encoder/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 num_epochs: 51
 
@@ -41,3 +37,7 @@ seed: 1
 print_config: True
 # Disable (or not) python warnings
 ignore_warnings: True
+
+hydra:
+  run:
+    dir: ${hydra:runtime.cwd}/flow_encoder/outputs/${now:%Y-%m-%d}/${xp_name}-${now:%H-%M-%S}
