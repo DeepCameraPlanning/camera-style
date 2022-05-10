@@ -59,11 +59,13 @@ def extract_reconstruct(config: DictConfig):
             **model_params
         )
         extractor = extractor.to(device)
+        extractor.model.eval()
     elif config.model.module_name == "autoencoder_i3d":
         model_params["checkpoint_path"] = config.model.checkpoint_path
         model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
         extractor = I3DAutoencoderModel(**model_params)
+        extractor.model.eval()
 
     reconstructions, gt_flows = [], []
     for batch in data_loader:

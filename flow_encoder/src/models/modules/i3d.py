@@ -604,7 +604,11 @@ def make_flow_encoder(pretrained_path: str, size: str = "large") -> nn.Module:
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
-        model.load_state_dict(pretrained_params)
+        state_dict = {
+            ".".join(k.split(".")[1:]): v
+            for k, v in pretrained_params["state_dict"].items()
+        }
+        model.load_state_dict(state_dict)
 
     return model
 
@@ -626,6 +630,10 @@ def make_flow_autoencoder(
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
-        model.load_state_dict(pretrained_params)
+        state_dict = {
+            ".".join(k.split(".")[1:]): v
+            for k, v in pretrained_params["state_dict"].items()
+        }
+        model.load_state_dict(state_dict)
 
     return model

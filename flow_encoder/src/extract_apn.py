@@ -36,6 +36,7 @@ def extract_features(config: DictConfig):
         "batch_size": config.compnode.batch_size,
     }
     model = I3DContrastiveEncoderModel.load_from_checkpoint(**model_params)
+    model.eval()
 
     trainer = Trainer(
         gpus=config.compnode.num_gpus,
