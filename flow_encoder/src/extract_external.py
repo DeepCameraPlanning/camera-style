@@ -18,6 +18,9 @@ from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
 )
+from flow_encoder.src.models.flow_vqvae import (
+    I3DContrastiveVQVAEModel,
+)
 from utils.file_utils import create_dir, save_pickle
 
 
@@ -71,6 +74,15 @@ def extract_features(config: DictConfig):
         model_params["checkpoint_path"] = config.model.checkpoint_path
         model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
+            **model_params, strict=False
+        )
+        extractor = extractor.to(device)
+        extractor.model.eval()
+    elif config.model.module_name == "contrastive_vqvae_i3d":
+        model_params["margin"] = config.model.margin
+        model_params["checkpoint_path"] = config.model.checkpoint_path
+        model_params["check_dir"] = config.datamodule.check_dir
+        extractor = I3DContrastiveVQVAEModel.load_from_checkpoint(
             **model_params, strict=False
         )
         extractor = extractor.to(device)

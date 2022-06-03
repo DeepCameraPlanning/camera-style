@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from flow_encoder.src.models.modules.vector_quantizer import VectorQuantizer
+
 
 class MaxPool3dSamePadding(nn.MaxPool3d):
     def compute_pad(self, dim, s):
@@ -589,6 +591,80 @@ class AutoencoderI3D(nn.Module):
         return self.encoder.Mixed_5c.b3b.parameters()
 
 
+class VQVAEI3D(nn.Module):
+    """Flow VQ-VAE with an I3D encoder. Latent dim: 490 / 980 / 2058."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        latent_dim: int,
+        n_embeddings: int,
+        commitment_cost: float,
+    ):
+        super(VQVAEI3D, self).__init__()
+        self.encoder = ReducedInceptionI3d(
+            in_channels=in_channels, out_channels=latent_dim
+        )
+        # Dimension of the latent code = [latent_dim, 2, 7, 7]
+        latent_in_channels = latent_dim // (7 * 7 * 2)
+        self.decoder = DecoderConv3D(in_channels=latent_in_channels)
+        self.quantizer = VectorQuantizer(
+            n_embeddings=n_embeddings,
+            embedding_dim=latent_dim,
+            commitment_cost=commitment_cost,
+        )
+
+    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        latent_features, residual_features = self._encode(x)
+        vq_loss, quantized_features, encodings = self._quantize(
+            latent_features
+        )
+        out = self._decode(quantized_features, residual_features)
+        return quantized_features, vq_loss, out
+
+    def extract_features(self, x) -> torch.Tensor:
+        for end_point in self.encoder.VALID_ENDPOINTS:
+            if end_point in self.encoder.end_points:
+                x = self.encoder._modules[end_point](x)
+        return x
+
+    def _encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        residual_features = []
+        for end_point in self.encoder.VALID_ENDPOINTS:
+            if end_point in self.encoder.end_points:
+                if isinstance(self.encoder._modules[end_point], nn.MaxPool3d):
+                    residual_features.append(x)
+                x = self.encoder._modules[end_point](x)
+        return x, residual_features
+
+    def _quantize(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        loss, quantized, perplexity, _ = self.quantizer(x)
+        return loss, quantized, perplexity
+
+    def _decode(
+        self, x: torch.Tensor, residual_features: torch.Tensor
+    ) -> torch.Tensor:
+        # up_conv_count = 0
+        for end_point in self.decoder.VALID_ENDPOINTS:
+            x = self.decoder._modules[end_point](x)
+            # if (
+            #     isinstance(self.decoder._modules[end_point], nn.Sequential)
+            #     and end_point != "Upconv3d_6"
+            # ):
+            #     up_conv_count += 1
+            #     x = torch.hstack([x, residual_features[-up_conv_count]])
+            # print(end_point, x.shape)
+        out = self.decoder.tanh(x)
+
+        return out
+
+    def _get_shared_layer(self) -> torch.Tensor:
+        """Return last encoder layer parameters."""
+        return self.encoder.Mixed_5c.b3b.parameters()
+
+
 def make_flow_encoder(pretrained_path: str, size: str = "large") -> nn.Module:
     """Load a standard flow I3D (2 channels) architecture.
 
@@ -627,6 +703,35 @@ def make_flow_autoencoder(
     """
     latent_dim = 490 if size == "small" else 980 if size == "large" else 2058
     model = AutoencoderI3D(in_channels=2, latent_dim=latent_dim)
+
+    if pretrained_path:
+        pretrained_params = torch.load(pretrained_path)
+        state_dict = {
+            ".".join(k.split(".")[1:]): v
+            for k, v in pretrained_params["state_dict"].items()
+        }
+        model.load_state_dict(state_dict)
+
+    return model
+
+
+def make_flow_vqvae(pretrained_path: str, size: str = "large") -> nn.Module:
+    """Load a flow (2 channels) vqvae (I3D encoder) architecture.
+
+    :param pretrained_path: if provided load the model stored at this location.
+    :param size:
+        - "small" -> 490 dimensional latent code.
+        - "large" -> 960 dimensional latent code.
+        - "huge" -> 2058 dimensional latent code.
+    :return: configured flow vq-vae.
+    """
+    latent_dim = 490 if size == "small" else 980 if size == "large" else 2058
+    model = VQVAEI3D(
+        in_channels=2,
+        latent_dim=latent_dim,
+        n_embeddings=64,
+        commitment_cost=0.25,
+    )
 
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)

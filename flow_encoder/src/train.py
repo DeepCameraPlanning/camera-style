@@ -13,6 +13,9 @@ from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
 )
+from flow_encoder.src.models.flow_vqvae import (
+    I3DContrastiveVQVAEModel,
+)
 
 
 def train(config: DictConfig):
@@ -64,6 +67,10 @@ def train(config: DictConfig):
         model_params["margin"] = config.model.margin
         model_params["check_dir"] = config.datamodule.check_dir
         model = I3DContrastiveAutoencoderModel(**model_params)
+    elif config.model.module_name == "contrastive_vqvae_i3d":
+        model_params["margin"] = config.model.margin
+        model_params["check_dir"] = config.datamodule.check_dir
+        model = I3DContrastiveVQVAEModel(**model_params)
     elif config.model.module_name == "autoencoder_i3d":
         model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
