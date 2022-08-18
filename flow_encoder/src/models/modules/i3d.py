@@ -615,11 +615,9 @@ class VQVAEI3D(nn.Module):
         )
 
     def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        latent_features, residual_features = self._encode(x)
-        vq_loss, quantized_features, encodings = self._quantize(
-            latent_features
-        )
-        out = self._decode(quantized_features, residual_features)
+        latent_features = self._encode(x)
+        vq_loss, quantized_features = self._quantize(latent_features)
+        out = self._decode(quantized_features)
         return quantized_features, vq_loss, out
 
     def extract_features(self, x) -> torch.Tensor:
@@ -628,34 +626,24 @@ class VQVAEI3D(nn.Module):
                 x = self.encoder._modules[end_point](x)
         return x
 
-    def _encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _encode(self, x: torch.Tensor) -> torch.Tensor:
         residual_features = []
         for end_point in self.encoder.VALID_ENDPOINTS:
             if end_point in self.encoder.end_points:
                 if isinstance(self.encoder._modules[end_point], nn.MaxPool3d):
                     residual_features.append(x)
                 x = self.encoder._modules[end_point](x)
-        return x, residual_features
+        return x
 
     def _quantize(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        loss, quantized, perplexity, _ = self.quantizer(x)
-        return loss, quantized, perplexity
+        loss, z_q, perplexity, encodings, encoding_indices = self.quantizer(x)
+        return loss, z_q
 
-    def _decode(
-        self, x: torch.Tensor, residual_features: torch.Tensor
-    ) -> torch.Tensor:
-        # up_conv_count = 0
+    def _decode(self, x: torch.Tensor) -> torch.Tensor:
         for end_point in self.decoder.VALID_ENDPOINTS:
             x = self.decoder._modules[end_point](x)
-            # if (
-            #     isinstance(self.decoder._modules[end_point], nn.Sequential)
-            #     and end_point != "Upconv3d_6"
-            # ):
-            #     up_conv_count += 1
-            #     x = torch.hstack([x, residual_features[-up_conv_count]])
-            # print(end_point, x.shape)
         out = self.decoder.tanh(x)
 
         return out
@@ -715,7 +703,12 @@ def make_flow_autoencoder(
     return model
 
 
-def make_flow_vqvae(pretrained_path: str, size: str = "large") -> nn.Module:
+def make_flow_vqvae(
+    pretrained_path: str,
+    size: str,
+    n_embeddings: int,
+    commitment_cost: float,
+) -> nn.Module:
     """Load a flow (2 channels) vqvae (I3D encoder) architecture.
 
     :param pretrained_path: if provided load the model stored at this location.
@@ -729,8 +722,8 @@ def make_flow_vqvae(pretrained_path: str, size: str = "large") -> nn.Module:
     model = VQVAEI3D(
         in_channels=2,
         latent_dim=latent_dim,
-        n_embeddings=64,
-        commitment_cost=0.25,
+        n_embeddings=n_embeddings,
+        commitment_cost=commitment_cost,
     )
 
     if pretrained_path:

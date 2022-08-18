@@ -1,71 +1,73 @@
-from typing import Tuple
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class VectorQuantizer(nn.Module):
-    def __init__(
-        self, n_embeddings: int, embedding_dim: int, commitment_cost: float
-    ):
+    """
+    https://github.com/MishaLaskin/vqvae/blob/master/models/quantizer.py
+
+    Discretization bottleneck part of the VQ-VAE.
+    Inputs:
+    - n_embeddings : number of embeddings
+    - embedding_dim : dimension of embedding
+    - commitment_cost : commitment cost used in loss beta * ||z_e(x)-sg[e]||^2
+    """
+
+    def __init__(self, n_embeddings, embedding_dim, commitment_cost):
         super(VectorQuantizer, self).__init__()
+        self.n_embeddings = n_embeddings
+        self.embedding_dim = embedding_dim
+        self.commitment_cost = commitment_cost
 
-        self._embedding_dim = embedding_dim
-        self._n_embeddings = n_embeddings
-
-        self._embedding = nn.Embedding(self._n_embeddings, self._embedding_dim)
-        self._embedding.weight.data.uniform_(
-            -1 / self._n_embeddings, 1 / self._n_embeddings
-        )
-        self._commitment_cost = commitment_cost
-
-    def forward(
-        self, inputs: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        # convert inputs from BCTHW -> BTHWC
-        inputs = inputs.permute(0, 2, 3, 4, 1).contiguous()
-        input_shape = inputs.shape
-
-        # Flatten input
-        flat_input = inputs.view(-1, self._embedding_dim)
-
-        # Calculate distances
-        distances = (
-            torch.sum(flat_input ** 2, dim=1, keepdim=True)
-            + torch.sum(self._embedding.weight ** 2, dim=1)
-            - 2 * torch.matmul(flat_input, self._embedding.weight.t())
+        self.embedding = nn.Embedding(self.n_embeddings, self.embedding_dim)
+        self.embedding.weight.data.uniform_(
+            -1.0 / self.n_embeddings, 1.0 / self.n_embeddings
         )
 
-        # Encoding
-        encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
-        encodings = torch.zeros(
-            encoding_indices.shape[0],
-            self._n_embeddings,
-            device=inputs.device,
-        )
-        encodings.scatter_(1, encoding_indices, 1)
+    def forward(self, z):
+        """
+        Inputs the output of the encoder network z and maps it to a discrete
+        one-hot vector that is the index of the closest embedding vector e_j
+        z (continuous) -> z_q (discrete)
+        z.shape = (batch, channel, height, width)
+        quantization pipeline:
+            1. get encoder input (B,C,H,W)
+            2. flatten input to (B*H*W,C)
+        """
+        # reshape z: BCTHW -> BTHWC and flatten
+        z = z.permute(0, 2, 3, 4, 1).contiguous()
+        z_flattened = z.view(-1, self.embedding_dim)
 
-        # Quantize and unflatten
-        quantized = torch.matmul(encodings, self._embedding.weight).view(
-            input_shape
-        )
-
-        # Loss
-        e_latent_loss = F.mse_loss(quantized, inputs)
-        q_latent_loss = F.mse_loss(quantized, inputs)
-        loss = q_latent_loss + self._commitment_cost * e_latent_loss
-
-        quantized = inputs + (quantized - inputs)
-        avg_probs = torch.mean(encodings, dim=0)
-        perplexity = torch.exp(
-            -torch.sum(avg_probs * torch.log(avg_probs + 1e-10))
+        # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
+        d = (
+            torch.sum(z_flattened ** 2, dim=1, keepdim=True)
+            + torch.sum(self.embedding.weight ** 2, dim=1)
+            - 2 * torch.matmul(z_flattened, self.embedding.weight.t())
         )
 
-        # convert quantized from BTHWC -> BCTHW
-        return (
-            loss,
-            quantized.permute(0, 4, 1, 2, 3).contiguous(),
-            perplexity,
-            encodings,
+        # find closest encodings
+        min_encoding_indices = torch.argmin(d, dim=1).unsqueeze(1)
+        min_encodings = torch.zeros(
+            min_encoding_indices.shape[0], self.n_embeddings, device=z.device
         )
+        min_encodings.scatter_(1, min_encoding_indices, 1)
+
+        # get quantized latent vectors
+        z_q = torch.matmul(min_encodings, self.embedding.weight).view(z.shape)
+
+        # compute loss for embedding
+        loss = torch.mean(
+            (z_q.detach() - z) ** 2
+        ) + self.commitment_cost * torch.mean((z_q - z.detach()) ** 2)
+
+        # preserve gradients
+        z_q = z + (z_q - z).detach()
+
+        # perplexity
+        e_mean = torch.mean(min_encodings, dim=0)
+        perplexity = torch.exp(-torch.sum(e_mean * torch.log(e_mean + 1e-10)))
+
+        # reshape back to match original input shape
+        z_q = z_q.permute(0, 4, 1, 2, 3).contiguous()
+
+        return loss, z_q, perplexity, min_encodings, min_encoding_indices
