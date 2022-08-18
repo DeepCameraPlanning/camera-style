@@ -1,0 +1,53 @@
+num_epochs: 151
+run_type: extract_external
+root: ${hydra:runtime.cwd}
+data_dir: /home/robin/Work/camera-planning/camera-style/data/MotionSet
+test_dir: ${root}/flow_encoder/tests
+model_dir: ${root}/flow_encoder/models
+result_dir: ${root}/flow_encoder/results
+viz_dir: ${root}/visualizations
+project_name: camera-style-flow-encoder
+xp_name: vqvae-gradNorm-ranking-mse-step1-224-noskip-490-tiny-extract
+log_offline: false
+checkpoint_metric: val/loss
+checkpoint_dirpath: ${root}/flow_encoder/checkpoints
+seed: 1
+print_config: true
+ignore_warnings: true
+compnode:
+  batch_size: 28
+  num_workers: 15
+  num_gpus: 1
+  num_nodes: 1
+  accelerator: ddp
+model:
+  module_name: contrastive_vqvae_i3d
+  histogram: false
+  grid_dims:
+  - 6
+  - 10
+  n_angle_bins: 8
+  model_size: small
+
+  # change this one
+  pretrained_path: /home/robin/Work/camera-planning/camera-style/flow_encoder/checkpoints/vqvae-gradNorm-ranking-mse-step1-224-noskip-490-small512-epoch=97-val_loss=0.00.ckpt
+
+  checkpoint_path: /home/robin/Work/camera-planning/camera-style/flow_encoder/checkpoints/vqvae-gradNorm-ranking-mse-step1-224-noskip-490-small512-epoch=97-val_loss=0.00.ckpt
+  optimizer: adam
+  softmax: false
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  momentum: 0.9
+  margin: 1.0
+  n_frames: 16
+  stride: 16
+  frame_size: 224
+datamodule:
+  n_classes: 2
+  split_dir: ${data_dir}/splits
+  unity_dir: ${data_dir}/flows/flow_unity_step_pth
+  raft_dir: ${data_dir}/flows/flow_raft_step_pth
+  masked: false
+  n_temporal_mask: 1
+  spatial_mask_size: 20
+  flow_type: positive

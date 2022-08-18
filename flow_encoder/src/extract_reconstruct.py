@@ -54,7 +54,6 @@ def extract_reconstruct(config: DictConfig):
     if config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["margin"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
             **model_params
         )
@@ -62,7 +61,6 @@ def extract_reconstruct(config: DictConfig):
         extractor.model.eval()
     elif config.model.module_name == "autoencoder_i3d":
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
         extractor = I3DAutoencoderModel(**model_params)
         extractor.model.eval()

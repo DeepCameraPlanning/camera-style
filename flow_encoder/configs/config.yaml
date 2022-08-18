@@ -1,10 +1,11 @@
 defaults:
   - _self_
-  - compnode: light_1n_1g_28b.yaml
-  - model: contrastive_autoencoder_i3d.yaml
-  - datamodule: unit_flow.yaml
+  - compnode: light_1n_1g_32b.yaml
+  - model: contrastive_vqvae_i3d.yaml
+  - datamodule: inverse_flow.yaml
+  - hparams_search: null
 
-num_epochs: 101
+num_epochs: 151
 
 # Type of run to launch (current: train, TODO: debug/eval/infer/...)
 run_type: train
@@ -23,17 +24,19 @@ viz_dir: ${root}/visualizations
 project_name: camera-style-flow-encoder
 # Name of the run is accessed by loggers
 xp_name: null
+# Name of the group is accessed by loggers
+group_name: null
 # Wether to synced the logs or not (WandB)
 log_offline: false
 # Metric to monitor to save models
-checkpoint_metric: "val/loss"
+checkpoint_metric: val/raw_loss
 # Directory to save model checkpoints
 checkpoint_dirpath: ${root}/flow_encoder/checkpoints
 
 # Seed for random number generators
 seed: 1
 # Pretty print config at the start of the run using Rich library
-print_config: True
+print_config: False
 # Disable (or not) python warnings
 ignore_warnings: True
 

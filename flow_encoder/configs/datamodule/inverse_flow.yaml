@@ -1,0 +1,5 @@
+split_dir: ${data_dir}/splits
+unity_dir: ${data_dir}/flows/flow_unity_inverse_pth
+raft_dir: ${data_dir}/flows/flow_raft_inverse_pth
+masked: false
+flow_type: "positive"

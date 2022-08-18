@@ -1,6 +1,11 @@
 import hydra
 from omegaconf import DictConfig
 
+# @hydra.main(
+#   config_path="configs/shortcuts/", config_name="vqvae_config.yaml"
+#   config_path="configs/shortcuts/", config_name="vqvae_extract.yml"
+# )
+
 
 @hydra.main(config_path="configs/", config_name="config.yaml")
 def main(config: DictConfig):

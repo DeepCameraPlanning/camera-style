@@ -49,7 +49,6 @@ def train(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
-        "check_dir": config.datamodule.check_dir,
     }
     model = LatentCharacterModel(**model_params)
 

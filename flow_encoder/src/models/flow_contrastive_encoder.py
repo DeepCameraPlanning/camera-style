@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Tuple
 
+from omegaconf import DictConfig
 import torch
 from torch.nn import TripletMarginLoss
 from pytorch_lightning import LightningModule
@@ -22,9 +23,11 @@ class I3DContrastiveEncoderModel(LightningModule):
         weight_decay: float,
         momentum: float,
         batch_size: int,
+        config: DictConfig,
     ):
         super().__init__()
 
+        self._config = config
         self._optimizer = optimizer
         self._lr = learning_rate
         self._weight_decay = weight_decay
@@ -128,6 +131,9 @@ class I3DContrastiveEncoderModel(LightningModule):
 
         return outputs
 
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]):
+        checkpoint["config"] = self._config
+
     def configure_optimizers(self) -> Tuple[List[Any], List[Any]]:
         """Define optimizers and LR schedulers."""
         if self._optimizer == "sgd":
@@ -137,15 +143,13 @@ class I3DContrastiveEncoderModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, "min", 0.1, verbose=False
-            )
 
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-            scheduler = torch.optim.lr_scheduler.LambdaLR(
-                optimizer, lr_lambda=lambda x: x  # Identity, only to monitor
-            )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, "min", 0.1, verbose=False
+        )
 
         return {
             "optimizer": optimizer,

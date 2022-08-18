@@ -1,14 +1,11 @@
-import os.path as osp
 from typing import Any, Dict, List, Tuple
 
-import matplotlib.pyplot as plt
+from omegaconf import DictConfig
 import torch
-from torch.nn import MSELoss  # , L1Loss()
+from torch.nn import MSELoss
 from pytorch_lightning import LightningModule
 
 from flow_encoder.src.models.modules.i3d import make_flow_autoencoder
-from utils.flow_utils import FlowUtils
-from utils.file_utils import create_dir
 
 
 class I3DAutoencoderModel(LightningModule):
@@ -17,15 +14,16 @@ class I3DAutoencoderModel(LightningModule):
         pretrained_path: str,
         model_size: str,
         flow_type: str,
-        check_dir: str,
         optimizer: str,
         learning_rate: float,
         weight_decay: float,
         momentum: float,
         batch_size: int,
+        config: DictConfig,
     ):
         super().__init__()
 
+        self._config = config
         self._optimizer = optimizer
         self._lr = learning_rate
         self._weight_decay = weight_decay
@@ -33,62 +31,9 @@ class I3DAutoencoderModel(LightningModule):
         self._batch_size = batch_size
         self._flow_type = flow_type
 
-        # self.loss = L1Loss()
         self.loss = MSELoss()
 
         self.model = make_flow_autoencoder(pretrained_path, model_size)
-
-        self._check_dir = check_dir
-        self.flow_utils = FlowUtils()
-
-    def _shared_log_step(
-        self,
-        mode: str,
-        loss: torch.Tensor,
-    ):
-        """Log metrics at each epoch and each step for the training."""
-        on_step = True if mode == "train" else False
-        self.log(
-            f"{mode}/loss",
-            loss,
-            on_step=on_step,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-
-    def _log_check(self, gt_flows: torch.Tensor, pred_flows: torch.Tensor):
-        """Log pred and gt flow."""
-        n_frames = min(self._batch_size, 10)
-        current_check_dir = osp.join(
-            self._check_dir, "epoch-" + str(self.current_epoch).zfill(4)
-        )
-        create_dir(current_check_dir)
-        for frame_index in range(n_frames):
-            gt_check_path = osp.join(
-                current_check_dir, str(frame_index).zfill(3) + "_gt.png"
-            )
-            gt_frame = self.flow_utils.flow_to_frame(
-                gt_flows[frame_index, :, 0]
-                .permute(1, 2, 0)
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            plt.imsave(gt_check_path, gt_frame)
-            pred_check_path = osp.join(
-                current_check_dir, str(frame_index).zfill(3) + "_pred.png"
-            )
-            pred_frame = self.flow_utils.flow_to_frame(
-                pred_flows[frame_index, :, 0]
-                .permute(1, 2, 0)
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            plt.imsave(pred_check_path, pred_frame)
 
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
@@ -100,16 +45,9 @@ class I3DAutoencoderModel(LightningModule):
         loss = self.loss(out_flows, input_flows)
         outputs = {
             "clipname": batch[f"{self._flow_type}_flows"],
-            "gt_flow": input_flows,
-            "pred_flow": out_flows,
+            "gt_flows": input_flows,
+            "pred_flows": out_flows,
         }
-
-        if (
-            batch_idx == 0
-            and self._check_dir is not None
-            and self.current_epoch % 5 == 0
-        ):
-            self._log_check(input_flows, out_flows)
 
         return loss, outputs
 
@@ -118,20 +56,38 @@ class I3DAutoencoderModel(LightningModule):
     ) -> Dict[str, torch.Tensor]:
         """Training loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        loss, _ = out
-        self._shared_log_step("train", loss)
+        loss, outputs = out
 
-        return {"loss": loss}
+        metric_dict = {"loss": loss}
+        flow_dict = {
+            "gt_flows": outputs["gt_flows"].detach(),
+            "pred_flows": outputs["pred_flows"].detach(),
+        }
+
+        return {
+            "loss": loss,
+            "metric_dict": metric_dict,
+            "flow_dict": flow_dict,
+        }
 
     def validation_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Validation loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        loss, _ = out
-        self._shared_log_step("val", loss)
+        loss, outputs = out
 
-        return {"loss": loss}
+        metric_dict = {"loss": loss}
+        flow_dict = {
+            "gt_flows": outputs["gt_flows"].detach(),
+            "pred_flows": outputs["pred_flows"].detach(),
+        }
+
+        return {
+            "loss": loss,
+            "metric_dict": metric_dict,
+            "flow_dict": flow_dict,
+        }
 
     def test_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
@@ -164,6 +120,9 @@ class I3DAutoencoderModel(LightningModule):
 
         return outputs
 
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]):
+        checkpoint["config"] = self._config
+
     def configure_optimizers(self) -> Tuple[List[Any], List[Any]]:
         """Define optimizers and LR schedulers."""
         if self._optimizer == "sgd":
@@ -173,15 +132,13 @@ class I3DAutoencoderModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, "min", 0.1, verbose=False
-            )
 
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-            scheduler = torch.optim.lr_scheduler.LambdaLR(
-                optimizer, lr_lambda=lambda x: x  # Identity, only to monitor
-            )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, "min", 0.1, verbose=False
+        )
 
         return {
             "optimizer": optimizer,

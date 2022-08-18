@@ -1,9 +1,5 @@
 module_name: contrastive_autoencoder_i3d
 
-histogram: false
-grid_dims: [6, 10]
-n_angle_bins: 8
-
 model_size: small
 pretrained_path: null
 checkpoint_path: ${checkpoint_dirpath}/contrastive_autoencoder_last.ckpt
@@ -12,7 +8,9 @@ softmax: false
 learning_rate: 1e-3
 weight_decay: 1e-4
 momentum: 0.9
+contrastive_mode: triplet
 margin: 1.0
+grad_norm_alpha: 0.5
 
 n_frames: 16
 stride: 16

@@ -1,47 +1,59 @@
-import os.path as osp
 from typing import Any, Dict, List, Tuple
 
-import matplotlib.pyplot as plt
-import torch
-from torch.nn import MSELoss  # , TripletMarginLoss
+from omegaconf import DictConfig
 from pytorch_lightning import LightningModule
+import torch
+from torch.nn import MSELoss, TripletMarginLoss
 
 from flow_encoder.src.models.metrics.ranking import RankingLoss
 from flow_encoder.src.models.modules.i3d import make_flow_vqvae
-from utils.flow_utils import FlowUtils
-from utils.file_utils import create_dir
 
 
 class I3DContrastiveVQVAEModel(LightningModule):
+    """
+    https://colab.research.google.com/github/zalandoresearch/
+    pytorch-vq-vae/blob/master/vq-vae.ipynb#scrollTo=oB8R7mGnTRtU
+    """
+
     def __init__(
         self,
         pretrained_path: str,
+        contrastive_mode: str,
         model_size: str,
-        check_dir: str,
+        n_embeddings: int,
+        commitment_cost: float,
         optimizer: str,
         margin: float,
         learning_rate: float,
         weight_decay: float,
         momentum: float,
         batch_size: int,
+        config: DictConfig,
     ):
         super().__init__()
 
+        self._config = config
         self._optimizer = optimizer
         self._lr = learning_rate
         self._weight_decay = weight_decay
         self._momentum = momentum
         self._batch_size = batch_size
 
-        # self.contrastive_loss = TripletMarginLoss()
-        self.contrastive_loss = RankingLoss(margin)
+        self.contrastive_mode = contrastive_mode
+        if contrastive_mode == "triplet":
+            self.contrastive_loss = TripletMarginLoss(margin)
+        elif contrastive_mode == "ranking":
+            self.contrastive_loss = RankingLoss(margin)
         self.reconstruction_loss = MSELoss()
-        self.loss_weights = torch.nn.Parameter(torch.ones(3))
+        self.sqrt_loss_weights = torch.nn.Parameter(torch.ones(3))
+        self.loss_weights = self.sqrt_loss_weights.square()
 
-        self.model = make_flow_vqvae(pretrained_path, model_size)
-
-        self._check_dir = check_dir
-        self._flow_utils = FlowUtils()
+        self.model = make_flow_vqvae(
+            pretrained_path,
+            size=model_size,
+            n_embeddings=n_embeddings,
+            commitment_cost=commitment_cost,
+        )
 
     @staticmethod
     def get_pair_labels(
@@ -59,122 +71,9 @@ class I3DContrastiveVQVAEModel(LightningModule):
     def backward(self, loss, optimizer, idx):
         loss.backward(retain_graph=True)
 
-    def _shared_log_step(
-        self,
-        mode: str,
-        total_loss: torch.Tensor,
-        triplet_loss: torch.Tensor,
-        reconstruction_loss: torch.Tensor,
-        vq_loss: torch.Tensor,
-    ):
-        """Log metrics at each epoch and each step for the training."""
-        on_step = True if mode == "train" else False
-        self.log(
-            f"{mode}/loss",
-            total_loss,
-            on_step=on_step,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/triplet_loss",
-            triplet_loss,
-            on_step=on_step,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/reconstruction_loss",
-            reconstruction_loss,
-            on_step=on_step,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/vq_loss",
-            vq_loss,
-            on_step=on_step,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/contrastive_weight",
-            self.loss_weights[0],
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/reconstruction_weight",
-            self.loss_weights[1],
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-        self.log(
-            f"{mode}/vq_weight",
-            self.loss_weights[2],
-            on_step=False,
-            on_epoch=True,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-            batch_size=self._batch_size,
-        )
-
-    def _log_check(self, gt_flows: torch.Tensor, pred_flows: torch.Tensor):
-        """Log pred and gt flow."""
-        n_frames = min(self._batch_size, 10)
-        current_check_dir = osp.join(
-            self._check_dir, "epoch-" + str(self.current_epoch).zfill(4)
-        )
-        create_dir(current_check_dir)
-        for frame_index in range(n_frames):
-            gt_check_path = osp.join(
-                current_check_dir, str(frame_index).zfill(3) + "_gt.png"
-            )
-            gt_frame = self._flow_utils.flow_to_frame(
-                gt_flows[frame_index, :, 0]
-                .permute(1, 2, 0)
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            plt.imsave(gt_check_path, gt_frame)
-            pred_check_path = osp.join(
-                current_check_dir, str(frame_index).zfill(3) + "_pred.png"
-            )
-            pred_frame = self._flow_utils.flow_to_frame(
-                pred_flows[frame_index, :, 0]
-                .permute(1, 2, 0)
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            plt.imsave(pred_check_path, pred_frame)
-
     def _shared_eval_step(
         self, batch: torch.Tensor, batch_idx: int
     ) -> Tuple[
-        torch.Tensor,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
@@ -192,19 +91,26 @@ class I3DContrastiveVQVAEModel(LightningModule):
         positive_features, _, _ = self.model(positive_flows)
         negative_features, _, _ = self.model(negative_flows)
 
-        anchor_features = torch.cat([anchor_features, anchor_features])
-        all_features = torch.cat([positive_features, negative_features])
-        labels = self.get_pair_labels(positive_features, negative_features)
+        if self.contrastive_mode == "triplet":
+            contrastive_value = self.contrastive_loss(
+                anchor_features, positive_features, negative_features
+            )
+        elif self.contrastive_mode == "ranking":
+            anchor_features = torch.cat([anchor_features, anchor_features])
+            all_features = torch.cat([positive_features, negative_features])
+            labels = self.get_pair_labels(positive_features, negative_features)
+            contrastive_value = self.contrastive_loss(
+                anchor_features, all_features, labels
+            )
 
-        contrastive_value = self.contrastive_loss(
-            anchor_features, all_features, labels
-        )
         reconstruction_value = self.reconstruction_loss(
             anchor_out, anchor_flows
         )
         self.task_loss = torch.stack(
             [contrastive_value, reconstruction_value, vq_loss]
         )
+        raw_loss = self.task_loss.sum()
+        self.loss_weights = self.sqrt_loss_weights.square()
         self.total_loss = torch.mul(self.loss_weights, self.task_loss).sum()
         outputs = {
             "positive_clipname": batch["positive_clipname"],
@@ -212,61 +118,84 @@ class I3DContrastiveVQVAEModel(LightningModule):
             "anchor_features": anchor_features,
             "positive_features": positive_features,
             "negative_features": negative_features,
-            "gt_flow": anchor_flows,
-            "pred_flow": anchor_out,
+            "gt_flows": anchor_flows,
+            "pred_flows": anchor_out,
         }
 
-        if (
-            batch_idx == 0
-            and self._check_dir is not None
-            and self.current_epoch % 5 == 0
-        ):
-            self._log_check(anchor_flows, anchor_out)
-
-        return self.total_loss, self.task_loss, outputs
+        return self.total_loss, raw_loss, self.task_loss, outputs
 
     def training_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Training loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, task_loss, _ = out
-        contrastive_value, reconstruction_value, vq_loss = task_loss
-        self._shared_log_step(
-            "train",
-            total_loss,
-            contrastive_value,
-            reconstruction_value,
-            vq_loss,
-        )
+        total_loss, raw_loss, task_loss, outputs = out
+        contrastive_value, reconstruction_value, vq_value = task_loss
 
-        return {"loss": total_loss}
+        metric_dict = {
+            "loss": total_loss,
+            "raw_loss": raw_loss,
+            "contrastive_loss": contrastive_value,
+            "reconstruction_loss": reconstruction_value,
+            "vq_loss": vq_value,
+        }
+        weight_dict = {
+            "contrastive_weight": self.loss_weights[0].detach(),
+            "reconstruction_weight": self.loss_weights[1].detach(),
+            "vq_weight": self.loss_weights[2].detach(),
+        }
+        flow_dict = {
+            "gt_flows": outputs["gt_flows"].detach(),
+            "pred_flows": outputs["pred_flows"].detach(),
+        }
+
+        return {
+            "loss": total_loss,
+            "metric_dict": metric_dict,
+            "weight_dict": weight_dict,
+            "flow_dict": flow_dict,
+        }
 
     def validation_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Validation loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, task_loss, _ = out
-        contrastive_value, reconstruction_value, vq_loss = task_loss
-        self._shared_log_step(
-            "val", total_loss, contrastive_value, reconstruction_value, vq_loss
-        )
+        total_loss, raw_loss, task_loss, outputs = out
+        contrastive_value, reconstruction_value, vq_value = task_loss
 
-        return {"loss": total_loss}
+        metric_dict = {
+            "loss": total_loss,
+            "raw_loss": raw_loss,
+            "contrastive_loss": contrastive_value,
+            "reconstruction_loss": reconstruction_value,
+            "vq_loss": vq_value,
+        }
+        flow_dict = {
+            "gt_flows": outputs["gt_flows"],
+            "pred_flows": outputs["pred_flows"],
+        }
+
+        return {
+            "loss": total_loss,
+            "metric_dict": metric_dict,
+            "flow_dict": flow_dict,
+        }
 
     def test_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         """Test loop."""
         out = self._shared_eval_step(batch, batch_idx)
-        total_loss, task_loss, outputs = out
-        contrastive_value, reconstruction_value, vq_loss = task_loss
+        total_loss, raw_loss, task_loss, outputs = out
+        contrastive_value, reconstruction_value, vq_value = task_loss
 
         return {
             "loss": total_loss,
+            "raw_loss": raw_loss,
             "contrastive_value": contrastive_value,
             "reconstruction_value": reconstruction_value,
+            "vq_value": vq_value,
             "out": outputs,
         }
 
@@ -294,6 +223,9 @@ class I3DContrastiveVQVAEModel(LightningModule):
 
         return outputs
 
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]):
+        checkpoint["config"] = self._config
+
     def configure_optimizers(self) -> Tuple[List[Any], List[Any]]:
         """Define optimizers and LR schedulers."""
         if self._optimizer == "sgd":
@@ -303,15 +235,12 @@ class I3DContrastiveVQVAEModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, "min", 0.1, verbose=False
-            )
-
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-            scheduler = torch.optim.lr_scheduler.LambdaLR(
-                optimizer, lr_lambda=lambda x: x  # Identity, only to monitor
-            )
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, "min", 0.1, verbose=False
+        )
 
         return {
             "optimizer": optimizer,

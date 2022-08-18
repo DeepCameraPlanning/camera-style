@@ -72,7 +72,6 @@ def extract_features(config: DictConfig):
     elif config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["margin"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
             **model_params, strict=False
         )
@@ -80,8 +79,10 @@ def extract_features(config: DictConfig):
         extractor.model.eval()
     elif config.model.module_name == "contrastive_vqvae_i3d":
         model_params["margin"] = config.model.margin
+        model_params["commitment_cost"] = config.model.commitment_cost
+        model_params["n_embeddings"] = config.model.n_embeddings
+        model_params["contrastive_mode"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        model_params["check_dir"] = config.datamodule.check_dir
         extractor = I3DContrastiveVQVAEModel.load_from_checkpoint(
             **model_params, strict=False
         )
@@ -89,7 +90,6 @@ def extract_features(config: DictConfig):
         extractor.model.eval()
     elif config.model.module_name == "autoencoder_i3d":
         model_params["checkpoint_path"] = config.model.checkpoint_path
-        model_params["check_dir"] = config.datamodule.check_dir
         model_params["flow_type"] = config.datamodule.flow_type
         extractor = I3DAutoencoderModel(**model_params)
         extractor = extractor.to(device)

@@ -41,7 +41,6 @@ def main(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
-        "check_dir": config.viz_dir,
         "flow_type": config.datamodule.flow_type,
         "checkpoint_path": config.model.checkpoint_path,
     }
