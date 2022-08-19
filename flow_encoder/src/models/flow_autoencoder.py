@@ -132,13 +132,14 @@ class I3DAutoencoderModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
-
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, "min", 0.1, verbose=False
+            )
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, "min", 0.1, verbose=False
-        )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer, lr_lambda=lambda x: 1  # Identity, only to monitor
+            )
 
         return {
             "optimizer": optimizer,

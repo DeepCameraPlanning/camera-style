@@ -18,7 +18,7 @@ from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
 )
-from flow_encoder.src.models.flow_vqvae import (
+from flow_encoder.src.models.flow_contrastive_vqvae import (
     I3DContrastiveVQVAEModel,
 )
 from utils.file_utils import create_dir, save_pickle
@@ -54,6 +54,7 @@ def extract_features(config: DictConfig):
         "weight_decay": config.model.weight_decay,
         "momentum": config.model.momentum,
         "batch_size": config.compnode.batch_size,
+        "config": config,
     }
     device = "cuda" if config.compnode.num_gpus > 0 else "cpu"
 
@@ -71,6 +72,7 @@ def extract_features(config: DictConfig):
         extractor.model.eval()
     elif config.model.module_name == "contrastive_autoencoder_i3d":
         model_params["margin"] = config.model.margin
+        model_params["contrastive_mode"] = config.model.margin
         model_params["checkpoint_path"] = config.model.checkpoint_path
         extractor = I3DContrastiveAutoencoderModel.load_from_checkpoint(
             **model_params, strict=False

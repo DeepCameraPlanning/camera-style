@@ -68,7 +68,7 @@ class GradNorm(Callback):
         # Renormalize the gradient weights
         with torch.no_grad():
             square_normalize_coeff = (
-                len(pl_module.loss_weights)
+                len(pl_module.sqrt_loss_weights)
                 / pl_module.sqrt_loss_weights.square().sum()
             )
             pl_module.sqrt_loss_weights.data = (

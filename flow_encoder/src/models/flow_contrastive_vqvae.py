@@ -45,8 +45,7 @@ class I3DContrastiveVQVAEModel(LightningModule):
         elif contrastive_mode == "ranking":
             self.contrastive_loss = RankingLoss(margin)
         self.reconstruction_loss = MSELoss()
-        self.sqrt_loss_weights = torch.nn.Parameter(torch.ones(3))
-        self.loss_weights = self.sqrt_loss_weights.square()
+        self.sqrt_loss_weights = torch.nn.Parameter(torch.ones(2))
 
         self.model = make_flow_vqvae(
             pretrained_path,
@@ -106,12 +105,13 @@ class I3DContrastiveVQVAEModel(LightningModule):
         reconstruction_value = self.reconstruction_loss(
             anchor_out, anchor_flows
         )
-        self.task_loss = torch.stack(
-            [contrastive_value, reconstruction_value, vq_loss]
-        )
+        self.task_loss = torch.stack([contrastive_value, reconstruction_value])
+        task_loss = torch.hstack([self.task_loss, vq_loss])
         raw_loss = self.task_loss.sum()
-        self.loss_weights = self.sqrt_loss_weights.square()
-        self.total_loss = torch.mul(self.loss_weights, self.task_loss).sum()
+        self.loss_weights = torch.hstack(
+            [self.sqrt_loss_weights.square(), torch.tensor(0.5, device="cuda")]
+        )
+        self.total_loss = torch.mul(self.loss_weights, task_loss).sum()
         outputs = {
             "positive_clipname": batch["positive_clipname"],
             "negative_clipname": batch["negative_clipname"],
@@ -122,7 +122,7 @@ class I3DContrastiveVQVAEModel(LightningModule):
             "pred_flows": anchor_out,
         }
 
-        return self.total_loss, raw_loss, self.task_loss, outputs
+        return self.total_loss, raw_loss, task_loss, outputs
 
     def training_step(
         self, batch: torch.Tensor, batch_idx: torch.Tensor
@@ -133,11 +133,11 @@ class I3DContrastiveVQVAEModel(LightningModule):
         contrastive_value, reconstruction_value, vq_value = task_loss
 
         metric_dict = {
-            "loss": total_loss,
-            "raw_loss": raw_loss,
-            "contrastive_loss": contrastive_value,
-            "reconstruction_loss": reconstruction_value,
-            "vq_loss": vq_value,
+            "loss": total_loss.detach(),
+            "raw_loss": raw_loss.detach(),
+            "contrastive_loss": contrastive_value.detach(),
+            "reconstruction_loss": reconstruction_value.detach(),
+            "vq_loss": vq_value.detach(),
         }
         weight_dict = {
             "contrastive_weight": self.loss_weights[0].detach(),
@@ -235,12 +235,14 @@ class I3DContrastiveVQVAEModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, "min", 0.1, verbose=False
+            )
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, "min", 0.1, verbose=False
-        )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer, lr_lambda=lambda x: 1  # Identity, only to monitor
+            )
 
         return {
             "optimizer": optimizer,

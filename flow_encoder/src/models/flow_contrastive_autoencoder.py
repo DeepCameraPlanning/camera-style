@@ -38,7 +38,8 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         elif contrastive_mode == "ranking":
             self.contrastive_loss = RankingLoss(margin)
         self.reconstruction_loss = MSELoss()
-        self.loss_weights = torch.nn.Parameter(torch.ones(2))
+        self.sqrt_loss_weights = torch.nn.Parameter(torch.ones(2))
+        self.loss_weights = self.sqrt_loss_weights.square()
 
         self.model = make_flow_autoencoder(pretrained_path, model_size)
 
@@ -96,6 +97,7 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         )
         self.task_loss = torch.stack([contrastive_value, reconstruction_value])
         raw_loss = self.task_loss.sum()
+        self.loss_weights = self.sqrt_loss_weights.square()
         self.total_loss = torch.mul(self.loss_weights, self.task_loss).sum()
         outputs = {
             "positive_clipname": batch["positive_clipname"],
@@ -103,8 +105,8 @@ class I3DContrastiveAutoencoderModel(LightningModule):
             "anchor_features": anchor_features,
             "positive_features": positive_features,
             "negative_features": negative_features,
-            "gt_flow": anchor_flows,
-            "pred_flow": anchor_out,
+            "gt_flows": anchor_flows,
+            "pred_flows": anchor_out,
         }
 
         return self.total_loss, raw_loss, self.task_loss, outputs
@@ -118,10 +120,10 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         contrastive_value, reconstruction_value = task_loss
 
         metric_dict = {
-            "loss": total_loss,
-            "raw_loss": raw_loss,
-            "contrastive_loss": contrastive_value,
-            "reconstruction_loss": reconstruction_value,
+            "loss": total_loss.detach(),
+            "raw_loss": raw_loss.detach(),
+            "contrastive_loss": contrastive_value.detach(),
+            "reconstruction_loss": reconstruction_value.detach(),
         }
         weight_dict = {
             "contrastive_weight": self.loss_weights[0].detach(),
@@ -146,13 +148,6 @@ class I3DContrastiveAutoencoderModel(LightningModule):
         out = self._shared_eval_step(batch, batch_idx)
         total_loss, raw_loss, task_loss, outputs = out
         contrastive_value, reconstruction_value = task_loss
-        self._shared_log_step(
-            "val",
-            total_loss,
-            raw_loss,
-            contrastive_value,
-            reconstruction_value,
-        )
 
         metric_dict = {
             "loss": total_loss,
@@ -223,13 +218,14 @@ class I3DContrastiveAutoencoderModel(LightningModule):
                 momentum=self._momentum,
                 lr=self._lr,
             )
-
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, "min", 0.1, verbose=False
+            )
         if self._optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), self._lr)
-
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, "min", 0.1, verbose=False
-        )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer, lr_lambda=lambda x: 1  # Identity, only to monitor
+            )
 
         return {
             "optimizer": optimizer,

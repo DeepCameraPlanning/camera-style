@@ -6,7 +6,7 @@ pretrained_path: null
 checkpoint_path: ${checkpoint_dirpath}/contrastive_vqvae_last.ckpt
 optimizer: adam
 softmax: false
-learning_rate: 1e-3
+learning_rate: 1e-2
 weight_decay: 1e-4
 momentum: 0.9
 contrastive_mode: ranking

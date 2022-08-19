@@ -14,7 +14,7 @@ from flow_encoder.src.models.flow_autoencoder import I3DAutoencoderModel
 from flow_encoder.src.models.flow_contrastive_autoencoder import (
     I3DContrastiveAutoencoderModel,
 )
-from flow_encoder.src.models.flow_vqvae import (
+from flow_encoder.src.models.flow_contrastive_vqvae import (
     I3DContrastiveVQVAEModel,
 )
 
