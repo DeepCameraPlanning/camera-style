@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Dict, Sequence
 
 
 import numpy as np
@@ -57,3 +57,18 @@ def divide(a: np.array, b: np.array) -> np.array:
         where=(b != 0),
     )
     return res
+
+
+def cfg2dict(cfg: DictConfig) -> Dict:
+    """
+    Recursively convert OmegaConf to vanilla dict
+    :param cfg:
+    :return:
+    """
+    cfg_dict = {}
+    for k, v in cfg.items():
+        if type(v) == DictConfig:
+            cfg_dict[k] = cfg2dict(v)
+        else:
+            cfg_dict[k] = v
+    return cfg_dict
