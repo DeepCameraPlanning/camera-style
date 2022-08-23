@@ -669,16 +669,16 @@ def make_flow_encoder(pretrained_path: str, size: str = "large") -> nn.Module:
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
         state_dict = {
-            ".".join(k.split(".")[1:]): v
+            k.replace("model.", ""): v
             for k, v in pretrained_params["state_dict"].items()
         }
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
 
     return model
 
 
 def make_flow_autoencoder(
-    pretrained_path: str, size: str = "large"
+    pretrained_path: str, size: str = "small"
 ) -> nn.Module:
     """Load a flow (2 channels) autoencoder (I3D encoder) architecture.
 
@@ -695,10 +695,10 @@ def make_flow_autoencoder(
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
         state_dict = {
-            ".".join(k.split(".")[1:]): v
+            k.replace("model.", ""): v
             for k, v in pretrained_params["state_dict"].items()
         }
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
 
     return model
 
@@ -729,9 +729,9 @@ def make_flow_vqvae(
     if pretrained_path:
         pretrained_params = torch.load(pretrained_path)
         state_dict = {
-            ".".join(k.split(".")[1:]): v
+            k.replace("model.", ""): v
             for k, v in pretrained_params["state_dict"].items()
         }
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
 
     return model
