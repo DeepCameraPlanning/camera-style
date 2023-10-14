@@ -42,8 +42,9 @@ class LatentCharacterModel(LightningModule):
         self._batch_size = batch_size
 
         self._bbox_coef = bbox_coef
-        self.bbox_loss = SmoothL1Loss(reduction="mean")
-        # self.bbox_loss = GIOULoss()
+        # self.bbox_loss = SmoothL1Loss(reduction="mean")
+        self.bbox_loss = GIOULoss()
+        # self.bbox_loss = IOULoss()
         self._reconstruction_coef = reconstruction_coef
         self.reconstruction_loss = MSELoss(reduction="mean")
 
@@ -137,7 +138,7 @@ class LatentCharacterModel(LightningModule):
         for frame_index in range(n_frames):
             gt_check_path = osp.join(
                 current_check_dir,
-                str(frame_index).zfill(3) + "_flow_target.png",
+                str(frame_index).zfill(3) + "_flow_gt.png",
             )
             gt_frame = self._flow_utils.flow_to_frame(
                 target_flows[frame_index, :, 0]
@@ -229,25 +230,22 @@ class LatentCharacterModel(LightningModule):
         input_character_mask = batch["input_character_mask"]
         target_bbox = batch["target_bbox"]
 
-        input_feature = self.autoencoder.encoder.extract_features(
-            input_flows, avg_out=False
-        )
-        import ipdb
+        # Encode flow
+        latent_feat, residual_feat = self.autoencoder._encode(input_flows)
+        # Encode bbox
+        b, c = latent_feat.shape[:2]
+        flatten_feat = latent_feat.view(b, c, -1)
+        out_feature, pred_bbox = self.model(flatten_feat, input_character_mask)
+        out_feature = out_feature.view(latent_feat.shape)
+        # Decode flow + bbox
+        pred_flows = self.autoencoder._decode(out_feature, residual_feat)
 
-        ipdb.set_trace()
-        out_feature, pred_bbox = self.model(
-            input_feature.view(input_feature.shape[0], -1),
-            input_character_mask,
-        )
-        pred_flows = self.autoencoder.decoder(
-            out_feature.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        )
         target_bbox = target_bbox.type(pred_bbox.dtype)
-        bbox_loss = self.bbox_loss(pred_bbox, target_bbox)
-        reconstruction_loss = self.reconstruction_loss(input_flows, pred_flows)
+        bbox_value = self.bbox_loss(pred_bbox, target_bbox)
+        reco_value = self.reconstruction_loss(input_flows, pred_flows)
         loss = (
-            self._bbox_coef * bbox_loss
-            + self._reconstruction_coef * reconstruction_loss
+            self._bbox_coef * bbox_value
+            + self._reconstruction_coef * reco_value
         )
 
         iou = self.iou(pred_bbox, target_bbox)
@@ -257,14 +255,14 @@ class LatentCharacterModel(LightningModule):
         outputs = {
             "clip_name": batch["clip_name"],
             "keyframe_indices": batch["keyframe_indices"],
-            "input_feature": input_feature,
             "input_character_mask": input_character_mask,
+            "latent_feature": latent_feat,
             "target_bbox": target_bbox,
             "pred_bbox": pred_bbox,
             "iou": iou,
             "giou": giou,
             "l1": l1,
-            "reconstruction": reconstruction_loss,
+            "reconstruction": reco_value,
         }
 
         if (
